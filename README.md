@@ -7,7 +7,8 @@ with a FastAPI backend and a D3.js dashboard.
 > synthetic, fictional data. It contains no proprietary algorithms, business rules, parameters
 > or data from any existing industrial scheduling system.
 
-**Status:** Phase 0 (project skeleton). No scheduling logic is implemented yet.
+**Status:** Phase 1 done (engine data models, validation, metrics and an independent schedule
+verifier). The CP-SAT solver is not implemented yet.
 
 ## Planned scope (MVP)
 
