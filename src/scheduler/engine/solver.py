@@ -27,13 +27,13 @@ class ScheduleVerificationError(RuntimeError):
 
 def map_status(cp_status: int) -> SolveStatus:
     """Map a CP-SAT status code to :class:`SolveStatus` (never upgrades FEASIBLE)."""
-    mapping = {
-        cp_model.OPTIMAL: SolveStatus.OPTIMAL,
-        cp_model.FEASIBLE: SolveStatus.FEASIBLE,
-        cp_model.INFEASIBLE: SolveStatus.INFEASIBLE,
-        cp_model.MODEL_INVALID: SolveStatus.MODEL_INVALID,
+    mapping: dict[int, SolveStatus] = {
+        int(cp_model.OPTIMAL): SolveStatus.OPTIMAL,
+        int(cp_model.FEASIBLE): SolveStatus.FEASIBLE,
+        int(cp_model.INFEASIBLE): SolveStatus.INFEASIBLE,
+        int(cp_model.MODEL_INVALID): SolveStatus.MODEL_INVALID,
     }
-    return mapping.get(cp_status, SolveStatus.UNKNOWN)
+    return mapping.get(int(cp_status), SolveStatus.UNKNOWN)
 
 
 def validate_params(params: SolveParams) -> list[str]:
@@ -59,17 +59,17 @@ def solve(problem: ProblemInstance, params: SolveParams | None = None) -> SolveR
     solver.parameters.num_workers = params.num_workers
     solver.parameters.random_seed = params.random_seed
 
-    status = map_status(solver.Solve(built.model))
-    wall = solver.WallTime()
+    status = map_status(solver.solve(built.model))
+    wall = solver.wall_time
 
     if status in (SolveStatus.INFEASIBLE, SolveStatus.UNKNOWN, SolveStatus.MODEL_INVALID):
         return SolveResult(status=status, wall_time_s=wall, messages=(_describe(status),))
 
     assignments = _extract(problem, built, solver)
-    objective = round(solver.ObjectiveValue())
+    objective = round(solver.objective_value)
     _check(problem, assignments, objective, params.weighted)
 
-    bound = solver.BestObjectiveBound()
+    bound = solver.best_objective_bound
     return SolveResult(
         status=status,
         assignments=assignments,
@@ -85,9 +85,9 @@ def _extract(
 ) -> tuple[Assignment, ...]:
     assignments: list[Assignment] = []
     for job in problem.jobs:
-        start = solver.Value(built.starts[job.id])
+        start = solver.value(built.starts[job.id])
         chosen = [
-            rid for rid in job.eligible if solver.BooleanValue(built.presence[(job.id, rid)])
+            rid for rid in job.eligible if solver.boolean_value(built.presence[(job.id, rid)])
         ]
         assignments.append(Assignment(job.id, chosen[0], start, start + job.duration))
     return tuple(assignments)

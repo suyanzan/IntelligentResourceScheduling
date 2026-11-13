@@ -68,12 +68,12 @@ def build_model(problem: ProblemInstance, *, weighted: bool = True) -> BuiltMode
 
     for resource in problem.resources:
         fixed = [
-            model.NewFixedSizeIntervalVar(start, end - start, f"closed_{resource.id}_{start}")
+            model.new_fixed_size_interval_var(start, end - start, f"closed_{resource.id}_{start}")
             for start, end in blocked_periods(resource, horizon)
         ]
-        model.AddNoOverlap([*intervals_by_resource[resource.id], *fixed])
+        model.add_no_overlap([*intervals_by_resource[resource.id], *fixed])
 
-    model.Minimize(sum(tardiness_terms))
+    model.minimize(sum(tardiness_terms))
     return BuiltModel(model=model, starts=starts, presence=presence)
 
 
@@ -87,20 +87,20 @@ def _add_job(
     intervals_by_resource: dict[str, list[cp_model.IntervalVar]],
     tardiness_terms: list[cp_model.LinearExpr],
 ) -> None:
-    start = model.NewIntVar(job.release, horizon - job.duration, f"start_{job.id}")
+    start = model.new_int_var(job.release, horizon - job.duration, f"start_{job.id}")
     starts[job.id] = start
 
     literals: list[cp_model.IntVar] = []
     for resource_id in job.eligible:
-        literal = model.NewBoolVar(f"on_{job.id}_{resource_id}")
+        literal = model.new_bool_var(f"on_{job.id}_{resource_id}")
         presence[(job.id, resource_id)] = literal
         literals.append(literal)
-        interval = model.NewOptionalIntervalVar(
+        interval = model.new_optional_interval_var(
             start, job.duration, start + job.duration, literal, f"iv_{job.id}_{resource_id}"
         )
         intervals_by_resource[resource_id].append(interval)
-    model.AddExactlyOne(literals)
+    model.add_exactly_one(literals)
 
-    late = model.NewIntVar(0, horizon, f"late_{job.id}")
-    model.Add(late >= start + job.duration - job.due)
+    late = model.new_int_var(0, horizon, f"late_{job.id}")
+    model.add(late >= start + job.duration - job.due)
     tardiness_terms.append((job.priority if weighted else 1) * late)
