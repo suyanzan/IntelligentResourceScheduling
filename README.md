@@ -7,9 +7,9 @@ with a FastAPI backend and a D3.js dashboard.
 > synthetic, fictional data. It contains no proprietary algorithms, business rules, parameters
 > or data from any existing industrial scheduling system.
 
-**Status:** Phase 3 done (CP-SAT solver with independent result verification, plus a seeded
-synthetic data generator with `tiny`, `small` and `medium` presets). Database, API and dashboard
-are not built yet.
+**Status:** Phase 4 done (engine, seeded synthetic data, PostgreSQL persistence with Alembic
+migrations, and a service layer that stores scenarios and runs). The API and dashboard are not
+built yet.
 
 ## Planned scope (MVP)
 
@@ -55,6 +55,21 @@ from scheduler.engine.solver import solve
 result = solve(preset("small"))
 print(result.status, result.objective)
 ```
+
+## Database
+
+PostgreSQL via SQLAlchemy 2.x. Scenarios own their resources, jobs and calendars; each solve
+stores an immutable run (status, objective, bound, gap, assignments, metrics) together with an
+`input_hash` of the exact inputs. Once a scenario has runs its inputs are locked; clone it to
+edit. Schema changes go through Alembic:
+
+```bash
+export DATABASE_URL=postgresql+psycopg://scheduler:scheduler@localhost:5432/scheduler
+alembic upgrade head
+```
+
+Integration tests need a database: set `TEST_DATABASE_URL` (CI uses a Postgres service
+container). Without it they are skipped.
 
 ## Roadmap
 
