@@ -7,8 +7,9 @@ with a FastAPI backend and a D3.js dashboard.
 > synthetic, fictional data. It contains no proprietary algorithms, business rules, parameters
 > or data from any existing industrial scheduling system.
 
-**Status:** Phase 2 done (CP-SAT model and solver wrapper with status mapping, time limit and
-independent result verification). Synthetic data, database, API and dashboard are not built yet.
+**Status:** Phase 3 done (CP-SAT solver with independent result verification, plus a seeded
+synthetic data generator with `tiny`, `small` and `medium` presets). Database, API and dashboard
+are not built yet.
 
 ## Planned scope (MVP)
 
@@ -38,6 +39,21 @@ pip install -e ".[dev]"
 ruff check .
 mypy
 pytest
+```
+
+## Synthetic data
+
+`scheduler.synthetic.generator` builds fully fictional instances (lines, shifts, weekends,
+maintenance days, orders). The same seed always yields identical data on every platform; golden
+hashes in the tests pin the presets. Presets are sized to be feasible, but arbitrary configs are
+only guaranteed to be structurally valid.
+
+```python
+from scheduler.synthetic.generator import preset
+from scheduler.engine.solver import solve
+
+result = solve(preset("small"))
+print(result.status, result.objective)
 ```
 
 ## Roadmap
