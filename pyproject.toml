@@ -46,3 +46,7 @@ python_version = "3.11"
 strict = true
 mypy_path = "src"
 packages = ["scheduler"]
+
+[[tool.mypy.overrides]]
+module = ["ortools.*"]
+ignore_missing_imports = true
