@@ -195,7 +195,6 @@ def test_status_mapping() -> None:
     assert map_status(cp_model.INFEASIBLE) is SolveStatus.INFEASIBLE
     assert map_status(cp_model.MODEL_INVALID) is SolveStatus.MODEL_INVALID
     assert map_status(cp_model.UNKNOWN) is SolveStatus.UNKNOWN
-    assert map_status(-1) is SolveStatus.UNKNOWN
 
 
 def test_blocked_periods() -> None:

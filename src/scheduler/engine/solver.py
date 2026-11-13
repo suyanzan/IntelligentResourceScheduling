@@ -25,15 +25,15 @@ class ScheduleVerificationError(RuntimeError):
     """The solver returned a schedule that fails independent verification."""
 
 
-def map_status(cp_status: int) -> SolveStatus:
+def map_status(cp_status: cp_model.CpSolverStatus) -> SolveStatus:
     """Map a CP-SAT status code to :class:`SolveStatus` (never upgrades FEASIBLE)."""
-    mapping: dict[int, SolveStatus] = {
-        int(cp_model.OPTIMAL): SolveStatus.OPTIMAL,
-        int(cp_model.FEASIBLE): SolveStatus.FEASIBLE,
-        int(cp_model.INFEASIBLE): SolveStatus.INFEASIBLE,
-        int(cp_model.MODEL_INVALID): SolveStatus.MODEL_INVALID,
+    mapping: dict[cp_model.CpSolverStatus, SolveStatus] = {
+        cp_model.OPTIMAL: SolveStatus.OPTIMAL,
+        cp_model.FEASIBLE: SolveStatus.FEASIBLE,
+        cp_model.INFEASIBLE: SolveStatus.INFEASIBLE,
+        cp_model.MODEL_INVALID: SolveStatus.MODEL_INVALID,
     }
-    return mapping.get(int(cp_status), SolveStatus.UNKNOWN)
+    return mapping.get(cp_status, SolveStatus.UNKNOWN)
 
 
 def validate_params(params: SolveParams) -> list[str]:
