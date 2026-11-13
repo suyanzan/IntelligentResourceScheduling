@@ -5,6 +5,7 @@ import pytest
 from scheduler.engine.metrics import (
     available_units,
     compute_metrics,
+    daily_capacity,
     objective_value,
     tardiness,
     verify_schedule,
@@ -145,3 +146,13 @@ def test_back_to_back_jobs_do_not_overlap(problem: ProblemInstance) -> None:
     violations = verify_schedule(problem, ok)
     assert not _has(violations, "overlap")
     assert _has(violations, "J2", "single availability window")
+
+
+def test_daily_capacity() -> None:
+    windows = [Window(0, 8), Window(10, 18), Window(24, 30)]
+    assert daily_capacity(windows, 24) == 16  # day 0: 8 + 8, day 1: 6
+    assert daily_capacity([], 24) == 0
+    # A window crossing midnight counts towards both days.
+    assert daily_capacity([Window(20, 30)], 24) == 6
+    with pytest.raises(ValueError, match="units_per_day"):
+        daily_capacity(windows, 0)

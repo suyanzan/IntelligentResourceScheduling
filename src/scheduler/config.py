@@ -1,0 +1,33 @@
+"""Application settings read from the environment."""
+
+from __future__ import annotations
+
+import os
+from collections.abc import Mapping
+from dataclasses import dataclass
+
+DEFAULT_DATABASE_URL = "postgresql+psycopg://scheduler:scheduler@localhost:5432/scheduler"
+DEFAULT_MAX_TIME_LIMIT_S = 60.0
+
+
+def normalize_database_url(url: str) -> str:
+    """Point plain ``postgres://`` / ``postgresql://`` URLs (as hosting providers hand them out)
+    at the psycopg 3 driver that this project uses."""
+    for prefix in ("postgres://", "postgresql://"):
+        if url.startswith(prefix):
+            return "postgresql+psycopg://" + url[len(prefix) :]
+    return url
+
+
+@dataclass(frozen=True, slots=True)
+class Settings:
+    database_url: str
+    max_time_limit_s: float
+
+
+def get_settings(env: Mapping[str, str] | None = None) -> Settings:
+    source = os.environ if env is None else env
+    return Settings(
+        database_url=normalize_database_url(source.get("DATABASE_URL", DEFAULT_DATABASE_URL)),
+        max_time_limit_s=float(source.get("MAX_TIME_LIMIT_S", DEFAULT_MAX_TIME_LIMIT_S)),
+    )

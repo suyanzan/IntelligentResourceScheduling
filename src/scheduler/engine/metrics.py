@@ -48,6 +48,21 @@ def available_units(windows: Sequence[Window], upto: int) -> int:
     return sum(max(0, min(w.end, upto) - max(w.start, 0)) for w in windows)
 
 
+def daily_capacity(windows: Sequence[Window], units_per_day: int) -> int:
+    """Largest number of available units on any single day (windows split at day boundaries)."""
+    if units_per_day < 1:
+        raise ValueError("units_per_day must be at least 1")
+    per_day: dict[int, int] = defaultdict(int)
+    for window in windows:
+        cursor = window.start
+        while cursor < window.end:
+            day = cursor // units_per_day
+            segment_end = min(window.end, (day + 1) * units_per_day)
+            per_day[day] += segment_end - cursor
+            cursor = segment_end
+    return max(per_day.values(), default=0)
+
+
 def compute_metrics(
     problem: ProblemInstance,
     assignments: Sequence[Assignment],
