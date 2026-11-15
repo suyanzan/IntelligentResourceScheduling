@@ -24,14 +24,17 @@ MIN_CPU_HOURS = 1_000
 MAX_CPU_HOURS = 150_000
 MAINTENANCE_UNITS = 12  # one maintenance block per line when maintenance is enabled
 
-# "Live" scenario: orders arrive over time, some in the DIFFUSION layer, each OPC order is
-# followed by an AUTORP order, and merging is capped.
+# "Live" scenario: five lines, orders arrive over time, some in the DIFFUSION layer, each OPC
+# order is followed by an AUTORP order, merging is capped, and every due date is today, tomorrow
+# or the day after (the end of that day).
+LIVE_LINE_CPUS: tuple[int, ...] = (500, 1000, 1500, 2000, 1500)  # lines A..E
+DUE_DAYS = 3
 MERGE_CAP_CPUS = 3000  # a job may merge lines up to this many CPUs in total
 AUTORP_PERCENT = 42  # AUTORP work as a percentage of its OPC order's work
 CYCLE_LIMIT_UNITS = 12  # a DIFFUSION order should finish within 12 h of arriving
 DIFFUSION_PERCENT = 25  # share of OPC orders that are DIFFUSION
 DIFFUSION_MAX_CPU_HOURS = 20_000  # DIFFUSION orders are small: one free line can make 12 h
-ARRIVAL_DAYS = 8  # DIFFUSION orders arrive during the first days
+ARRIVAL_DAYS = 2  # DIFFUSION orders arrive during the first two days
 BUSY_LINES = ("A", "B", "C")  # lines still running the current order when the plan starts
 
 
@@ -119,7 +122,7 @@ def _generate_live(config: OpcConfig) -> ProblemInstance:
             ),
             capacity=cpus,
         )
-        for i, cpus in enumerate(LINE_CPUS)
+        for i, cpus in enumerate(LIVE_LINE_CPUS)
     )
     ids = tuple(r.id for r in resources)
 
@@ -129,16 +132,16 @@ def _generate_live(config: OpcConfig) -> ProblemInstance:
         diffusion = rng.random() * 100 < DIFFUSION_PERCENT
         draw = rng.random()
         priority = _randint(rng, 1, 5)
-        followup = 0
         if diffusion:
             work = MIN_CPU_HOURS + int(draw * (DIFFUSION_MAX_CPU_HOURS - MIN_CPU_HOURS))
             release = _randint(rng, 1, ARRIVAL_DAYS * UNITS_PER_DAY)
-            due = release + CYCLE_LIMIT_UNITS + _randint(rng, 0, 72)
+            due = _due_at_end_of_day(rng)
+            if due < release + CYCLE_LIMIT_UNITS:  # leave room for the 12 h cycle
+                due = DUE_DAYS * UNITS_PER_DAY
         else:
             work = MIN_CPU_HOURS + int(draw * draw * (MAX_CPU_HOURS - MIN_CPU_HOURS))
             release = 0
-            followup = max(1, work * AUTORP_PERCENT // 100)
-            due = -(-(work + followup) // MERGE_CAP_CPUS) + _randint(rng, 0, horizon // 3)
+            due = _due_at_end_of_day(rng)
         jobs.append(
             Job(
                 id=f"O{number}",
@@ -173,3 +176,8 @@ def _generate_live(config: OpcConfig) -> ProblemInstance:
     if issues:  # pragma: no cover - guards against generator bugs
         raise ValueError("generator produced an invalid instance: " + "; ".join(issues))
     return problem
+
+
+def _due_at_end_of_day(rng: Random) -> int:
+    """End of today, tomorrow or the day after (hour 24, 48 or 72)."""
+    return (_randint(rng, 1, DUE_DAYS)) * UNITS_PER_DAY

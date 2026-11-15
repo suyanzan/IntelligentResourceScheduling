@@ -173,9 +173,8 @@ def test_live_preset_round_trips_and_solves_with_links_and_cycle_points(
     for code, job in jobs.items():
         if job["after"]:
             assert by_job[code][0]["start"] >= by_job[job["after"]][0]["end"]
-        used = sum(
-            {"A": 500, "B": 1000, "C": 1500, "D": 2000}[r["resource_id"]] for r in by_job[code]
-        )
+        caps = {"A": 500, "B": 1000, "C": 1500, "D": 2000, "E": 1500}
+        used = sum(caps[r["resource_id"]] for r in by_job[code])
         assert used <= 3000
     flagged = {r["job_id"] for r in rows if r["over_cycle"]}
     assert len(flagged) == run["metrics"]["cycle_points"]

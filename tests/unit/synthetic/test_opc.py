@@ -61,7 +61,7 @@ def test_bad_config_is_rejected(kwargs: dict[str, int]) -> None:
         OpcConfig(**kwargs)
 
 
-LIVE_HASH = "07f2ab01896d08c6bde436089fa51d1e51367fce8d5eea73d8d59586bcfa18fe"
+LIVE_HASH = "454469ab5cdd28d79511517429fe3155d88c6309a916a1d73d11ebfa24ffc710"
 
 
 def test_live_preset_golden_hash() -> None:
@@ -83,7 +83,12 @@ def test_live_preset_has_autorp_diffusion_cap_and_busy_lines() -> None:
     assert diffusion and all(j.cycle_limit == 12 and j.release >= 1 for j in diffusion)
     assert all(j.cycle_limit is None and j.release == 0 for j in opc if not j.layer)
     starts = {r.id: r.windows[0].start for r in problem.resources}
-    assert starts == {"A": 36, "B": 36, "C": 36, "D": 0}
+    assert starts == {"A": 36, "B": 36, "C": 36, "D": 0, "E": 0}
+    assert {r.id: r.capacity for r in problem.resources} == {
+        "A": 500, "B": 1000, "C": 1500, "D": 2000, "E": 1500
+    }
+    assert {j.due for j in problem.jobs} <= {24, 48, 72}  # today, tomorrow, the day after
+    assert all(j.release <= 48 for j in problem.jobs)
 
 
 def test_live_preset_start_schedule_is_valid_and_never_idles() -> None:
