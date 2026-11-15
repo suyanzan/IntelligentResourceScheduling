@@ -35,9 +35,18 @@ def instance_to_dict(problem: ProblemInstance) -> dict[str, Any]:
                 "priority": j.priority,
                 "release": j.release,
                 **({"work": j.work} if j.work is not None else {}),
+                **({"after": j.after} if j.after is not None else {}),
+                **({"cycle_limit": j.cycle_limit} if j.cycle_limit is not None else {}),
+                **({"layer": j.layer} if j.layer else {}),
             }
             for j in problem.jobs
         ],
+        **(
+            {"max_merge_capacity": problem.max_merge_capacity}
+            if problem.max_merge_capacity is not None
+            else {}
+        ),
+        **({"cycle_penalty": problem.cycle_penalty} if problem.cycle_penalty != 50 else {}),
     }
 
 
@@ -61,10 +70,19 @@ def instance_from_dict(data: dict[str, Any]) -> ProblemInstance:
             priority=j["priority"],
             release=j["release"],
             work=j.get("work"),
+            after=j.get("after"),
+            cycle_limit=j.get("cycle_limit"),
+            layer=j.get("layer", ""),
         )
         for j in data["jobs"]
     )
-    return ProblemInstance(horizon=data["horizon"], resources=resources, jobs=jobs)
+    return ProblemInstance(
+        horizon=data["horizon"],
+        resources=resources,
+        jobs=jobs,
+        max_merge_capacity=data.get("max_merge_capacity"),
+        cycle_penalty=data.get("cycle_penalty", 50),
+    )
 
 
 def instance_hash(problem: ProblemInstance) -> str:

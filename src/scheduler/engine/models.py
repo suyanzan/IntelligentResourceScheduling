@@ -11,6 +11,10 @@ Conventions:
 * ``priority`` is 1..5 (higher means more important) and doubles as the tardiness weight.
 * Delay of a job is ``end - due`` (negative when early); tardiness is ``max(0, delay)`` and a job
   is on time when its tardiness is 0.
+* A job may wait for another (``after``): it cannot start before that job has ended.
+* A job may have a ``cycle_limit`` (units from its release to its end). Going over it is not
+  forbidden: it costs one "cycle point", and each point adds ``cycle_penalty`` to the objective.
+* ``max_merge_capacity`` caps the combined capacity of the resources one job may merge.
 
 The models are plain, permissive dataclasses: structural problems (bad durations, overlapping
 windows, ...) are reported by :mod:`scheduler.engine.validation` rather than raised here, so
@@ -72,6 +76,9 @@ class Job:
     priority: int = 1
     release: int = 0
     work: int | None = None  # capacity-hours; when set, ``duration`` is ignored
+    after: str | None = None  # id of a job that must end before this one starts
+    cycle_limit: int | None = None  # max units from release to end before a cycle point is given
+    layer: str = ""  # free-text label, e.g. "DIFFUSION" (display only)
 
 
 def duration_on(job: Job, resources: Sequence[Resource]) -> int:
@@ -86,17 +93,30 @@ def duration_on(job: Job, resources: Sequence[Resource]) -> int:
     return -(-job.work // total)
 
 
-def option_sets(job: Job, resources: dict[str, Resource]) -> list[tuple[Resource, ...]]:
+def option_sets(
+    job: Job, resources: dict[str, Resource], max_capacity: int | None = None
+) -> list[tuple[Resource, ...]]:
     """Resource sets a job may use: one per eligible resource, or every non-empty subset when
-    the job has ``work`` (so it may merge resources)."""
+    the job has ``work`` (so it may merge resources). With ``max_capacity`` a merged set whose
+    total capacity is larger is not allowed."""
     eligible = [resources[rid] for rid in job.eligible]
     if job.work is None:
         return [(resource,) for resource in eligible]
-    return [
+    subsets = (
         subset
         for size in range(1, len(eligible) + 1)
         for subset in combinations(eligible, size)
+    )
+    return [
+        subset
+        for subset in subsets
+        if max_capacity is None or sum(r.capacity for r in subset) <= max_capacity
     ]
+
+
+def over_cycle(job: Job, end: int) -> bool:
+    """True when ``job`` has a cycle limit and ending at ``end`` exceeds it."""
+    return job.cycle_limit is not None and end - job.release > job.cycle_limit
 
 
 def blocked_periods(resource: Resource, horizon: int) -> list[tuple[int, int]]:
@@ -124,6 +144,8 @@ class ProblemInstance:
     horizon: int
     resources: tuple[Resource, ...]
     jobs: tuple[Job, ...]
+    max_merge_capacity: int | None = None  # cap on the total capacity of merged resources
+    cycle_penalty: int = 50  # objective cost of one cycle point
 
     def job_by_id(self) -> dict[str, Job]:
         return {job.id: job for job in self.jobs}
@@ -184,3 +206,4 @@ class Metrics:
     makespan: int
     utilization: dict[str, float]
     mean_delay: float = 0.0  # sum of positive delays / number of jobs (early jobs count as 0)
+    cycle_points: int = 0  # jobs that exceeded their cycle limit

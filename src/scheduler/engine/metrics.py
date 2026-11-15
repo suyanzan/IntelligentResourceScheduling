@@ -19,6 +19,7 @@ from scheduler.engine.models import (
     Window,
     blocked_periods,
     duration_on,
+    over_cycle,
 )
 
 UtilizationBasis = Literal["makespan", "horizon"]
@@ -62,6 +63,7 @@ def objective_value(
         job = _lookup_job(jobs, job_id)
         late = tardiness(job, end)
         total += late * job.priority if weighted else late
+        total += problem.cycle_penalty * over_cycle(job, end)
     return total
 
 
@@ -102,6 +104,7 @@ def compute_metrics(
     on_time = 0
     total_late = 0
     weighted_late = 0
+    cycle_points = 0
     makespan = 0
     busy: dict[str, int] = defaultdict(int)
 
@@ -111,6 +114,7 @@ def compute_metrics(
         late = tardiness(job, end)
         total_late += late
         weighted_late += late * job.priority
+        cycle_points += over_cycle(job, end)
         if late == 0:
             on_time += 1
     for assignment in assignments:
@@ -133,6 +137,7 @@ def compute_metrics(
         makespan=makespan,
         utilization=utilization,
         mean_delay=total_late / job_count if job_count else 0.0,
+        cycle_points=cycle_points,
     )
 
 
@@ -219,8 +224,37 @@ def verify_schedule(
                     f"jobs {prev.job_id!r} and {cur.job_id!r} overlap on resource {resource_id!r}"
                 )
 
+    violations.extend(_verify_links(problem, rows))
     if no_idle and not violations:
         violations.extend(idle_violations(problem, assignments))
+    return violations
+
+
+def _verify_links(problem: ProblemInstance, rows: dict[str, list[Assignment]]) -> list[str]:
+    """Check ``after`` precedence and the merge capacity cap."""
+    violations: list[str] = []
+    resources = problem.resource_by_id()
+    for job in problem.jobs:
+        items = rows.get(job.id)
+        if not items:
+            continue
+        if job.after is not None and job.after in rows:
+            predecessor_end = rows[job.after][0].end
+            if items[0].start < predecessor_end:
+                violations.append(
+                    f"job {job.id!r} starts at {items[0].start}, before job {job.after!r} "
+                    f"ends at {predecessor_end}"
+                )
+        cap = problem.max_merge_capacity
+        if cap is not None and len(items) > 1:
+            total = sum(
+                resources[a.resource_id].capacity for a in items if a.resource_id in resources
+            )
+            if total > cap:
+                violations.append(
+                    f"job {job.id!r} merges lines with total capacity {total}, above the "
+                    f"limit {cap}"
+                )
     return violations
 
 

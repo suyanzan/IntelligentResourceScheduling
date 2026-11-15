@@ -40,8 +40,12 @@ def sequential_merge_schedule(
 
 def _applicable(problem: ProblemInstance) -> bool:
     ids = {r.id for r in problem.resources}
+    total = sum(r.capacity for r in problem.resources)
+    if problem.max_merge_capacity is not None and total > problem.max_merge_capacity:
+        return False
     if not problem.jobs or any(
-        j.work is None or j.release != 0 or set(j.eligible) != ids for j in problem.jobs
+        j.work is None or j.release != 0 or j.after is not None or set(j.eligible) != ids
+        for j in problem.jobs
     ):
         return False
     return all(

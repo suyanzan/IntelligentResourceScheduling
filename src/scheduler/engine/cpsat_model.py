@@ -11,13 +11,18 @@ Formulation (all times are integer units, windows are half-open):
 * ``I[j,o,r]`` optional interval ``[s_j, s_j + p_{j,o})`` on resource ``r`` of option ``o``,
   present iff ``x[j, o]``.
 * ``T_j``      tardiness, ``T_j >= e_j - due_j`` and ``T_j >= 0``.
+* ``C_j``      cycle point (only for jobs with a cycle limit): ``C_j`` is 1 unless
+  ``e_j - release_j <= cycle_limit_j``.
+
+A job with ``after`` starts no earlier than the end of that job.
 
 Constraints: each job picks exactly one option; per resource a ``NoOverlap`` over its optional
 intervals plus one fixed interval for every closed (unavailable) period. Because a job is a
 single non-preemptive interval on each chosen resource, it must then lie entirely inside one
 availability window of each of them.
 
-Objective: minimize ``sum(w_j * T_j)`` (or plain total tardiness when ``weighted`` is false).
+Objective: minimize ``sum(w_j * T_j) + cycle_penalty * sum(C_j)`` (plain total tardiness when
+``weighted`` is false). ``max_merge_capacity`` removes merged options that are too large.
 """
 
 from __future__ import annotations
@@ -80,8 +85,12 @@ def build_model(
     for job in problem.jobs:
         _add_job(
             model, job, resources, horizon, weighted, starts, ends, options,
-            intervals_by_resource, tardiness_terms,
+            intervals_by_resource, tardiness_terms, problem.max_merge_capacity,
+            problem.cycle_penalty,
         )
+    for job in problem.jobs:
+        if job.after is not None:
+            model.add(starts[job.id] >= ends[job.after])
 
     for resource in problem.resources:
         fixed = [
@@ -108,6 +117,8 @@ def _add_job(
     options: dict[str, list[Option]],
     intervals_by_resource: dict[str, list[cp_model.IntervalVar]],
     tardiness_terms: list[cp_model.LinearExpr],
+    max_capacity: int | None,
+    cycle_penalty: int,
 ) -> None:
     start = model.new_int_var(job.release, horizon, f"start_{job.id}")
     end = model.new_int_var(job.release, horizon, f"end_{job.id}")
@@ -115,7 +126,7 @@ def _add_job(
     ends[job.id] = end
 
     chosen: list[Option] = []
-    for subset in option_sets(job, resources):
+    for subset in option_sets(job, resources, max_capacity):
         duration = duration_on(job, subset)
         if job.release + duration > horizon:
             continue  # this combination can never finish inside the horizon
@@ -135,6 +146,11 @@ def _add_job(
     late = model.new_int_var(0, horizon, f"late_{job.id}")
     model.add(late >= end - job.due)
     tardiness_terms.append((job.priority if weighted else 1) * late)
+
+    if job.cycle_limit is not None:
+        over = model.new_bool_var(f"over_cycle_{job.id}")
+        model.add(end - job.release <= job.cycle_limit).only_enforce_if(over.negated())
+        tardiness_terms.append(cycle_penalty * over)
 
 
 def _add_no_idle(

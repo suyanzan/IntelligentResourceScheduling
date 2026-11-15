@@ -31,10 +31,41 @@ def validate_instance(problem: ProblemInstance) -> list[str]:
         if resource.capacity < 1:
             issues.append(f"resource {resource.id!r} capacity must be at least 1")
 
+    if problem.max_merge_capacity is not None and problem.max_merge_capacity < 1:
+        issues.append("max_merge_capacity must be at least 1")
+    if problem.cycle_penalty < 0:
+        issues.append("cycle_penalty must not be negative")
+
     known_resources = {r.id: r for r in problem.resources}
     for job in problem.jobs:
         issues.extend(_validate_job(job, problem.horizon, known_resources))
+    issues.extend(_validate_links(problem))
 
+    return issues
+
+
+def _validate_links(problem: ProblemInstance) -> list[str]:
+    """``after`` must name another job and must not form a loop; limits must be positive."""
+    issues: list[str] = []
+    after = {j.id: j.after for j in problem.jobs}
+    for job in problem.jobs:
+        if job.cycle_limit is not None and job.cycle_limit <= 0:
+            issues.append(f"job {job.id!r} cycle_limit must be positive, got {job.cycle_limit}")
+        if job.after is None:
+            continue
+        if job.after == job.id:
+            issues.append(f"job {job.id!r} cannot come after itself")
+        elif job.after not in after:
+            issues.append(f"job {job.id!r} comes after unknown job {job.after!r}")
+        else:
+            seen = {job.id}
+            cursor: str | None = job.after
+            while cursor is not None and cursor in after:
+                if cursor in seen:
+                    issues.append(f"job {job.id!r} is part of a loop of 'after' links")
+                    break
+                seen.add(cursor)
+                cursor = after[cursor]
     return issues
 
 
