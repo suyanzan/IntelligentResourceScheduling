@@ -177,7 +177,7 @@ $("run-select").addEventListener("change", (event) =>
 $("controls").addEventListener("submit", (event) => {
   event.preventDefault();
   if (!state.scenario) return;
-  const limit = Math.min(60, Math.max(1, Number($("time-limit").value) || 10));
+  const limit = Math.min(30, Math.max(1, Number($("time-limit").value) || 10));
   $("time-limit").value = String(limit);
   guarded(`Solving, up to ${limit} s`, async () => {
     const run = await api.solve(state.scenario.id, limit, $("no-idle").checked);
