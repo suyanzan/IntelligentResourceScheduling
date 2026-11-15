@@ -7,8 +7,8 @@ with a FastAPI backend and a D3.js dashboard.
 > synthetic, fictional data. It contains no proprietary algorithms, business rules, parameters
 > or data from any existing industrial scheduling system.
 
-**Status:** Phase 5 done (engine, seeded synthetic data, PostgreSQL persistence, and a REST
-API). The dashboard is not built yet.
+**Status:** Phase 6 done (engine, seeded synthetic data, PostgreSQL persistence, REST API and a
+D3 dashboard served at `/`). Scenario comparison and packaging are next.
 
 ## Planned scope (MVP)
 
@@ -92,6 +92,22 @@ Errors: 404 unknown id, 409 locked inputs, 422 invalid input (engine problems ar
 201 with a `status` of `OPTIMAL`, `FEASIBLE`, `INFEASIBLE` or `UNKNOWN`; only `OPTIMAL` means
 optimality was proven. `time_limit_s` is capped by the server setting `MAX_TIME_LIMIT_S`
 (default 60).
+
+## Dashboard
+
+Start the API and open `http://localhost:8000/`:
+
+```bash
+uvicorn scheduler.api.main:app
+```
+
+The page (plain HTML/CSS/JS with a vendored D3 v7, no build step, works offline) lets you add a
+synthetic scenario, solve it with a time limit, and inspect the result: solver status badge
+(optimal / feasible with gap / infeasible / no schedule), on-time rate, total and weighted
+tardiness, line utilization, a pannable and zoomable Gantt chart that marks late jobs and closed
+periods, and a sortable job table. It follows the system light/dark setting, works on phones,
+and the Gantt bars can be reached with the keyboard. Set `FRONTEND_DIR` to serve the files from
+another folder, or to an empty value to run the API only.
 
 ## Roadmap
 

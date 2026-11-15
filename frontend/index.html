@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Resource scheduling</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <script>
+    try {
+      var saved = localStorage.getItem("theme");
+      if (saved === "light" || saved === "dark") document.documentElement.dataset.theme = saved;
+    } catch (e) { /* storage unavailable: follow the system setting */ }
+  </script>
+</head>
+<body>
+  <header class="bar">
+    <h1>Resource scheduling</h1>
+    <form class="controls" id="controls">
+      <label>Scenario <select id="scenario-select" disabled></select></label>
+      <label>Run <select id="run-select" disabled></select></label>
+      <label>Time limit
+        <input id="time-limit" type="number" min="1" max="60" step="1" value="10"> s
+      </label>
+      <button id="solve-btn" type="submit" class="primary" disabled>Solve</button>
+      <span class="spacer"></span>
+      <label>Sample data
+        <select id="preset-select">
+          <option value="tiny">Tiny (6 jobs)</option>
+          <option value="small" selected>Small (20 jobs)</option>
+          <option value="medium">Medium (40 jobs)</option>
+        </select>
+      </label>
+      <button id="generate-btn" type="button">Add sample</button>
+    </form>
+    <button id="theme-btn" type="button" aria-pressed="false">Dark mode</button>
+  </header>
+
+  <div id="alert" role="alert" hidden></div>
+
+  <main id="main">
+    <section id="empty" class="empty" hidden>
+      <h2>No scenarios yet</h2>
+      <p>Create a scenario from fictional sample data, then solve it to see the schedule.</p>
+      <button id="empty-generate-btn" type="button" class="primary">Add sample scenario</button>
+    </section>
+
+    <div id="content" hidden>
+      <section id="summary" aria-labelledby="summary-title">
+        <h2 id="summary-title" class="sr-only">Summary</h2>
+        <div id="status" class="status-line"></div>
+        <div id="kpis" class="kpis"></div>
+      </section>
+
+      <section id="schedule" class="panel" aria-labelledby="schedule-title">
+        <div class="panel-head">
+          <h2 id="schedule-title">Schedule by line</h2>
+          <ul class="legend" aria-label="Legend">
+            <li><span class="key key-ok"></span>On time</li>
+            <li><span class="key key-late"></span>Past due date</li>
+            <li><span class="key key-closed"></span>Line closed</li>
+          </ul>
+          <div class="zoom" role="group" aria-label="Zoom">
+            <button type="button" id="zoom-fit">Fit schedule</button>
+            <button type="button" id="zoom-full">Full horizon</button>
+            <button type="button" id="zoom-in" aria-label="Zoom in">+</button>
+            <button type="button" id="zoom-out" aria-label="Zoom out">&minus;</button>
+          </div>
+        </div>
+        <div id="gantt" class="gantt-wrap"></div>
+        <p class="hint">Drag to pan. Hold Ctrl and scroll to zoom. Focus a bar with Tab for details.</p>
+      </section>
+
+      <div class="split">
+        <section id="utilization" aria-labelledby="util-title">
+          <h2 id="util-title">Line utilization</h2>
+          <div id="util-body"></div>
+        </section>
+        <section id="solver" aria-labelledby="solver-title">
+          <h2 id="solver-title">Solver result</h2>
+          <div id="solver-body"></div>
+        </section>
+      </div>
+
+      <section id="results" aria-labelledby="results-title">
+        <div class="results-head">
+          <h2 id="results-title">Job results</h2>
+          <label class="check"><input type="checkbox" id="late-only"> Show only late jobs</label>
+        </div>
+        <div class="table-wrap" id="results-body"></div>
+      </section>
+    </div>
+  </main>
+
+  <script src="vendor/d3.v7.9.0.min.js"></script>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

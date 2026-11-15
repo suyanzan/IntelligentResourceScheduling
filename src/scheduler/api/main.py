@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session, sessionmaker
 
 from scheduler import __version__
@@ -30,6 +33,11 @@ def create_app(
     @app.get("/api/health", tags=["health"])
     def health() -> dict[str, str]:
         return {"status": "ok", "version": __version__}
+
+    # Mounted last so that every /api route above takes precedence.
+    frontend_dir = app.state.settings.frontend_dir
+    if frontend_dir and Path(frontend_dir).is_dir():
+        app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
 
     return app
 

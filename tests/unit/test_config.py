@@ -26,3 +26,10 @@ def test_environment_overrides() -> None:
     settings = get_settings({"DATABASE_URL": "postgres://a/b", "MAX_TIME_LIMIT_S": "5.5"})
     assert settings.database_url == "postgresql+psycopg://a/b"
     assert settings.max_time_limit_s == 5.5
+
+
+def test_frontend_dir_setting() -> None:
+    assert get_settings({"FRONTEND_DIR": "/srv/ui"}).frontend_dir == "/srv/ui"
+    assert get_settings({"FRONTEND_DIR": ""}).frontend_dir is None
+    default = get_settings({}).frontend_dir
+    assert default is None or default.endswith("frontend")
