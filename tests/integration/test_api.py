@@ -70,6 +70,7 @@ def test_create_and_read_back(client: TestClient) -> None:
         "eligible": ["R1"],
         "priority": 2,
         "release": 0,
+        "work": None,
     }
 
 
