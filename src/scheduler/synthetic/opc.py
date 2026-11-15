@@ -35,6 +35,8 @@ CYCLE_LIMIT_UNITS = 12  # a DIFFUSION order should finish within 12 h of arrivin
 DIFFUSION_PERCENT = 25  # share of OPC orders that are DIFFUSION
 DIFFUSION_MAX_CPU_HOURS = 20_000  # DIFFUSION orders are small: one free line can make 12 h
 ARRIVAL_DAYS = 2  # DIFFUSION orders arrive during the first two days
+LIVE_HORIZON_UNITS = DUE_DAYS * UNITS_PER_DAY  # the live sample covers exactly three days
+LIVE_MAX_CPU_HOURS = 15_000  # three days of work must fit even when the plan starts late
 BUSY_LINES = ("A", "B", "C")  # lines still running the current order when the plan starts
 
 
@@ -113,7 +115,7 @@ def _make_job(
 def _generate_live(config: OpcConfig) -> ProblemInstance:
     """Orders that arrive over time, with AUTORP follow-ups and DIFFUSION cycle limits."""
     rng = Random(config.seed)
-    horizon = config.num_days * UNITS_PER_DAY
+    horizon = LIVE_HORIZON_UNITS
     resources = tuple(
         Resource(
             id=chr(ord("A") + i),
@@ -147,7 +149,7 @@ def _generate_live(config: OpcConfig) -> ProblemInstance:
             if due < release + CYCLE_LIMIT_UNITS:  # leave room for the 12 h cycle
                 due = max(DUE_DAYS * UNITS_PER_DAY, release + CYCLE_LIMIT_UNITS)
         else:
-            work = MIN_CPU_HOURS + int(draw * draw * (MAX_CPU_HOURS - MIN_CPU_HOURS))
+            work = MIN_CPU_HOURS + int(draw * draw * (LIVE_MAX_CPU_HOURS - MIN_CPU_HOURS))
             release = config.now_unit
             due = _due_at_end_of_day(rng)
         jobs.append(

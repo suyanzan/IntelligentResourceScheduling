@@ -186,3 +186,5 @@ also starts sorted by due date.
 - actions: **Start**, **Finish** (actual times editable), **Undo** (one step back), **Note** (delay reason), with an activity log.
 
 There is no login: the operator name is free text. Do not expose the page beyond the plant network without adding authentication. Frontend rules are unit-tested with `node --test frontend/tests/*.test.mjs`.
+
+The **OPC live** sample covers exactly three days (today, tomorrow, the day after; 72 time units). Order sizes are 1,000–15,000 CPU-hours so that the three days can be worked off even when the plan starts late in the day.

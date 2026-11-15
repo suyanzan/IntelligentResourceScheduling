@@ -61,7 +61,7 @@ def test_bad_config_is_rejected(kwargs: dict[str, int]) -> None:
         OpcConfig(**kwargs)
 
 
-LIVE_HASH = "454469ab5cdd28d79511517429fe3155d88c6309a916a1d73d11ebfa24ffc710"
+LIVE_HASH = "8971aae0d50ae62f959569fe1f1659a782441b9a6a222d917a7ea163dd052502"
 
 
 def test_live_preset_golden_hash() -> None:
@@ -118,3 +118,21 @@ def test_live_preset_can_start_later_in_the_day() -> None:
     schedule = best_start_schedule(problem, no_idle=True)
     assert schedule is not None
     assert verify_schedule(problem, schedule, no_idle=True) == []
+
+
+def test_live_preset_covers_exactly_three_days() -> None:
+    problem = generate_opc(OPC_PRESETS["opc_live"])
+    assert problem.horizon == 72
+    assert all(job.due <= 72 for job in problem.jobs)
+    assert all(window.end == 72 for line in problem.resources for window in line.windows)
+
+
+@pytest.mark.parametrize("hour", [0, 9, 15, 22])
+def test_live_preset_fits_in_three_days_whenever_it_starts(hour: int) -> None:
+    from dataclasses import replace
+
+    from scheduler.engine.heuristic import best_start_schedule
+
+    config = replace(OPC_PRESETS["opc_live"], now_unit=hour, busy_until=hour + 12)
+    problem = generate_opc(config)
+    assert best_start_schedule(problem, no_idle=True) is not None
