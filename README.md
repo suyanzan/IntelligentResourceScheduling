@@ -7,8 +7,8 @@ with a FastAPI backend and a D3.js dashboard.
 > synthetic, fictional data. It contains no proprietary algorithms, business rules, parameters
 > or data from any existing industrial scheduling system.
 
-**Status:** Phase 6 done (engine, seeded synthetic data, PostgreSQL persistence, REST API and a
-D3 dashboard served at `/`). Scenario comparison and packaging are next.
+**Status:** Phase 7 done (engine, seeded synthetic data, PostgreSQL persistence, REST API, D3
+dashboard served at `/`, and run comparison). Packaging (Docker, docs) is next.
 
 ## Planned scope (MVP)
 
@@ -108,6 +108,12 @@ tardiness, line utilization, a pannable and zoomable Gantt chart that marks late
 periods, and a sortable job table. It follows the system light/dark setting, works on phones,
 and the Gantt bars can be reached with the keyboard. Set `FRONTEND_DIR` to serve the files from
 another folder, or to an empty value to run the API only.
+
+**Comparing runs.** The "Compare runs" button puts two stored runs side by side: key figures with
+differences (B minus A), per-line utilization, two Gantt charts on a shared time axis with linked
+hover, and a table of jobs that moved. A winner is named only when both runs solved the same
+inputs with the same kind of objective; otherwise (a what-if with an extra line, say) the
+differences are shown without ranking. The API equivalent is `GET /api/compare?run_a=&run_b=`.
 
 ## Roadmap
 

@@ -57,3 +57,13 @@ export function closedPeriods(windows, horizon) {
   if (cursor < horizon) out.push({ start: cursor, end: horizon });
   return out;
 }
+
+const RUN_WORDS = {
+  OPTIMAL: "optimal", FEASIBLE: "feasible", INFEASIBLE: "infeasible", UNKNOWN: "no schedule", MODEL_INVALID: "invalid",
+};
+
+/** Short description of a run for lists: "Run 3: optimal, objective 28". */
+export function runLabel(run) {
+  const objective = run.objective_value == null ? "" : `, objective ${run.objective_value}`;
+  return `Run ${run.id}: ${RUN_WORDS[run.status]}${objective}`;
+}

@@ -1,6 +1,8 @@
 // Page controller: loads data from the API and drives the components.
 
 import * as api from "./api.js";
+import { createCompareView } from "./compare.js";
+import { runLabel } from "./format.js";
 import { createGantt } from "./gantt.js";
 import { renderKpis, renderSolver, renderStatusLine, renderUtilization } from "./panels.js";
 import { buildRows, createResultsTable } from "./results.js";
@@ -8,7 +10,7 @@ import { createTooltip } from "./tooltip.js";
 
 const $ = (id) => document.getElementById(id);
 
-const state = { scenarios: [], scenario: null, runs: [], run: null, busy: false };
+const state = { scenarios: [], scenario: null, runs: [], run: null, busy: false, mode: "single" };
 
 const tooltip = createTooltip();
 const gantt = createGantt($("gantt"), tooltip);
@@ -17,6 +19,8 @@ const results = createResultsTable($("results-body"), {
     gantt.highlight(jobId);
   },
 });
+
+const compare = createCompareView($("compare"), tooltip, { run: (work) => guarded(null, work) });
 
 // --- helpers ---------------------------------------------------------------------------------
 
@@ -46,7 +50,7 @@ function setBusy(busy, label) {
   state.busy = busy;
   document.body.classList.toggle("is-loading", busy);
   document.body.setAttribute("aria-busy", String(busy));
-  for (const id of ["scenario-select", "run-select", "time-limit", "solve-btn", "generate-btn", "empty-generate-btn"]) {
+  for (const id of ["scenario-select", "run-select", "time-limit", "solve-btn", "generate-btn", "empty-generate-btn", "compare-btn"]) {
     const needsScenario = id !== "generate-btn" && id !== "empty-generate-btn";
     const noRuns = id === "run-select" && state.runs.length === 0;
     $(id).disabled = busy || (needsScenario && !state.scenario) || noRuns;
@@ -64,12 +68,6 @@ async function guarded(label, work) {
   } finally {
     setBusy(false);
   }
-}
-
-function runLabel(run) {
-  const words = { OPTIMAL: "optimal", FEASIBLE: "feasible", INFEASIBLE: "infeasible", UNKNOWN: "no schedule", MODEL_INVALID: "invalid" };
-  const objective = run.objective_value == null ? "" : `, objective ${run.objective_value}`;
-  return `Run ${run.id}: ${words[run.status]}${objective}`;
 }
 
 function fillSelect(select, items, labelOf, selectedId) {
@@ -94,7 +92,7 @@ function emptyMessage(run) {
 function render() {
   const { scenario, run } = state;
   $("empty").hidden = Boolean(scenario);
-  $("content").hidden = !scenario;
+  $("content").hidden = !scenario || state.mode === "compare";
   if (!scenario) return;
 
   const model = { horizonStart: scenario.horizon_start, minutes: scenario.time_unit_minutes };
@@ -151,6 +149,18 @@ async function createSample() {
   await refreshScenarios(created.id);
 }
 
+function setMode(mode) {
+  state.mode = mode;
+  const comparing = mode === "compare";
+  $("compare").hidden = !comparing;
+  $("content").hidden = comparing || !state.scenario;
+  $("controls").inert = comparing;
+  document.body.classList.toggle("is-compare", comparing);
+  $("compare-btn").setAttribute("aria-pressed", String(comparing));
+  $("compare-btn").textContent = comparing ? "Back to schedule" : "Compare runs";
+  if (comparing) compare.refit();
+}
+
 // --- events ----------------------------------------------------------------------------------
 
 $("scenario-select").addEventListener("change", (event) =>
@@ -172,6 +182,14 @@ $("controls").addEventListener("submit", (event) => {
   guarded(`Solving, up to ${limit} s`, async () => {
     const run = await api.solve(state.scenario.id, limit);
     await selectScenario(state.scenario.id, run.id);
+  });
+});
+
+$("compare-btn").addEventListener("click", () => {
+  if (state.mode === "compare") return setMode("single");
+  guarded(null, async () => {
+    await compare.open(state.scenarios, state.scenario?.id);
+    setMode("compare");
   });
 });
 

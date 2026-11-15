@@ -32,6 +32,7 @@
       </label>
       <button id="generate-btn" type="button">Add sample</button>
     </form>
+    <button id="compare-btn" type="button" aria-pressed="false" disabled>Compare runs</button>
     <button id="theme-btn" type="button" aria-pressed="false">Dark mode</button>
   </header>
 
@@ -42,6 +43,66 @@
       <h2>No scenarios yet</h2>
       <p>Create a scenario from fictional sample data, then solve it to see the schedule.</p>
       <button id="empty-generate-btn" type="button" class="primary">Add sample scenario</button>
+    </section>
+
+
+    <section id="compare" hidden aria-labelledby="compare-title">
+      <h2 id="compare-title">Compare two runs</h2>
+      <form class="cmp-controls" id="cmp-controls" onsubmit="return false">
+        <label>Run A (baseline) <select id="cmp-a"></select></label>
+        <label>Run B <select id="cmp-b"></select></label>
+        <button type="button" id="cmp-swap">Swap</button>
+      </form>
+      <p class="note" id="cmp-hint" hidden>Solve at least two runs to compare them. Solve again with another time limit, or add another scenario.</p>
+
+      <div id="cmp-result" hidden>
+        <div id="cmp-verdict" class="status-line"></div>
+        <ul id="cmp-notes" class="messages"></ul>
+
+        <h3>Key figures</h3>
+        <div class="table-wrap">
+          <table id="cmp-kpis">
+            <caption class="sr-only">Key figures of run A and run B and the change from A to B</caption>
+            <thead><tr><th scope="col">Measure</th><th scope="col" class="num">Run A</th><th scope="col" class="num">Run B</th><th scope="col" class="num">Change (B &minus; A)</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <div class="cmp-gantts">
+          <section class="panel" aria-labelledby="cmp-a-title">
+            <h3 id="cmp-a-title"></h3>
+            <div id="cmp-gantt-a" class="gantt-wrap"></div>
+          </section>
+          <section class="panel" aria-labelledby="cmp-b-title">
+            <h3 id="cmp-b-title"></h3>
+            <div id="cmp-gantt-b" class="gantt-wrap"></div>
+          </section>
+        </div>
+        <p class="hint">Both charts use the same time range. Hover a bar to see the same job in the other chart.</p>
+
+        <h3>Line utilization</h3>
+        <div class="table-wrap" id="cmp-util">
+          <table>
+            <caption class="sr-only">Utilization of each line in run A and run B</caption>
+            <thead><tr><th scope="col">Line</th><th scope="col" class="num">Run A</th><th scope="col" class="num">Run B</th><th scope="col" class="num">Change</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <div class="results-head">
+          <h3>Job changes</h3>
+          <span class="note" id="cmp-jobs-count"></span>
+          <label class="check"><input type="checkbox" id="cmp-all"> Show unchanged jobs</label>
+        </div>
+        <div class="table-wrap" id="cmp-jobs">
+          <table>
+            <caption class="sr-only">Where each job is scheduled in run A and run B</caption>
+            <thead><tr><th scope="col">Job</th><th scope="col">Run A</th><th scope="col">Run B</th><th scope="col">Change</th><th scope="col" class="num">Lateness</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p class="table-empty" id="cmp-jobs-empty" hidden>No job changed between these runs.</p>
+      </div>
     </section>
 
     <div id="content" hidden>

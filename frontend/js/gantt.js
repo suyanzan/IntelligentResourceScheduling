@@ -46,9 +46,11 @@ export function createGantt(root, tooltip) {
     });
   svg.call(zoom).on("dblclick.zoom", null);
 
+  // "Fit schedule" shows everything up to the last job, or up to `model.fitTo` when set (so two
+  // charts being compared can share one time range).
   function fitEnd() {
-    if (!model.assignments.length) return model.horizon;
-    const last = d3.max(model.assignments, (a) => a.end);
+    const last = model.fitTo ?? (model.assignments.length ? d3.max(model.assignments, (a) => a.end) : null);
+    if (last == null) return model.horizon;
     return Math.min(model.horizon, Math.ceil(last * 1.03 + 2));
   }
 

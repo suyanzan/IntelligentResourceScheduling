@@ -50,3 +50,4 @@ export const getRun = (id) => request("GET", `/api/runs/${id}`);
 export const generate = (preset) => request("POST", "/api/data/generate", { preset });
 export const solve = (id, timeLimitSeconds) =>
   request("POST", `/api/scenarios/${id}/solve`, { time_limit_s: timeLimitSeconds });
+export const compare = (runA, runB) => request("GET", `/api/compare?run_a=${runA}&run_b=${runB}`);

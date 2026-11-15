@@ -248,6 +248,26 @@ tbody tr:hover, tbody tr.is-linked { background: color-mix(in srgb, var(--blue) 
   .spacer { display: none; }
 }
 
+
+/* --- comparison ----------------------------------------------------------------------------------- */
+#compare h3 { font-size: 15px; margin: 22px 0 8px; }
+.cmp-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-bottom: 14px; }
+.cmp-controls label { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); font-size: 13px; }
+.cmp-controls select { max-width: 320px; }
+#cmp-notes { margin: 8px 0 0; }
+.cmp-gantts { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; margin-top: 22px; }
+.cmp-gantts .panel { min-width: 0; }
+.cmp-gantts .panel h3 { margin: 0 0 8px; font-size: 14px; }
+.delta { font-size: 12px; font-weight: 600; padding: 1px 7px; border-radius: 10px; border: 1px solid var(--line); white-space: nowrap; }
+.delta[data-tone="good"] { color: var(--ink); border-color: var(--good); }
+.delta[data-tone="bad"] { color: var(--ink); border-color: var(--critical); }
+.code { color: var(--ink-3); font-size: 12px; }
+th[scope="row"] { text-align: left; font-weight: 600; }
+.is-compare #controls { display: none; }
+@media (max-width: 1100px) {
+  .cmp-gantts { grid-template-columns: minmax(0, 1fr); }
+}
+
 /* Touch screens: larger tap targets (at least 44px). */
 @media (pointer: coarse) {
   select, input[type="number"], button { min-height: 44px; }

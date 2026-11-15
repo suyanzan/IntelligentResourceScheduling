@@ -162,3 +162,42 @@ class RunDetail(RunSummary):
     horizon_start: dt.date | None
     time_unit_minutes: int
     assignments: list[AssignmentOut]
+
+
+# --- comparison --------------------------------------------------------------------------------
+
+
+class DeltaOut(BaseModel):
+    a: float | None
+    b: float | None
+    change: float | None = Field(description="b minus a; null when either run lacks the value.")
+
+
+class PlacementOut(BaseModel):
+    resource_id: str
+    start: int
+    end: int
+    tardiness: int
+
+
+class JobDiffOut(BaseModel):
+    job_id: str
+    job_name: str
+    a: PlacementOut | None
+    b: PlacementOut | None
+    moved: bool
+    tardiness_change: int | None
+
+
+class ComparisonOut(BaseModel):
+    a: RunSummary
+    b: RunSummary
+    same_scenario: bool
+    same_inputs: bool
+    objective_comparable: bool
+    better: Literal["a", "b", "tie"] | None
+    metrics: dict[str, DeltaOut]
+    utilization: dict[str, DeltaOut]
+    jobs: list[JobDiffOut]
+    moved_jobs: int
+    notes: list[str]

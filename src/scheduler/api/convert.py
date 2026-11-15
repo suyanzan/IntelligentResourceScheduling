@@ -7,7 +7,9 @@ from typing import cast
 
 from scheduler.api import schemas
 from scheduler.db import models as orm
+from scheduler.engine import comparison
 from scheduler.engine import models as em
+from scheduler.services.comparison_service import RunComparison
 from scheduler.services.scheduling_service import ScenarioOverview
 from scheduler.services.timeconv import unit_to_datetime
 
@@ -158,4 +160,46 @@ def run_detail(run: orm.ScheduleRun) -> schemas.RunDetail:
         horizon_start=scenario.horizon_start,
         time_unit_minutes=scenario.time_unit_minutes,
         assignments=assignments,
+    )
+
+
+def _delta(delta: comparison.Delta) -> schemas.DeltaOut:
+    return schemas.DeltaOut(a=delta.a, b=delta.b, change=delta.change)
+
+
+def _placement(placement: comparison.Placement | None) -> schemas.PlacementOut | None:
+    if placement is None:
+        return None
+    return schemas.PlacementOut(
+        resource_id=placement.resource_id,
+        start=placement.start,
+        end=placement.end,
+        tardiness=placement.tardiness,
+    )
+
+
+def comparison_out(compared: RunComparison) -> schemas.ComparisonOut:
+    result = compared.result
+    return schemas.ComparisonOut(
+        a=run_summary(compared.a),
+        b=run_summary(compared.b),
+        same_scenario=result.same_scenario,
+        same_inputs=result.same_inputs,
+        objective_comparable=result.objective_comparable,
+        better=result.better,
+        metrics={key: _delta(value) for key, value in result.metrics.items()},
+        utilization={key: _delta(value) for key, value in result.utilization.items()},
+        jobs=[
+            schemas.JobDiffOut(
+                job_id=job.job_id,
+                job_name=job.job_name,
+                a=_placement(job.a),
+                b=_placement(job.b),
+                moved=job.moved,
+                tardiness_change=job.tardiness_change,
+            )
+            for job in result.jobs
+        ],
+        moved_jobs=result.moved_jobs,
+        notes=list(result.notes),
     )

@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from scheduler import __version__
 from scheduler.api.errors import register_error_handlers
-from scheduler.api.routers import data, runs, scenarios
+from scheduler.api.routers import compare, data, runs, scenarios
 from scheduler.config import Settings, get_settings
 
 
@@ -28,6 +28,7 @@ def create_app(
     register_error_handlers(app)
     app.include_router(scenarios.router)
     app.include_router(runs.router)
+    app.include_router(compare.router)
     app.include_router(data.router)
 
     @app.get("/api/health", tags=["health"])
