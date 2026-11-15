@@ -193,3 +193,7 @@ The **OPC live** sample covers exactly three days (today, tomorrow, the day afte
 `/report.html` is a charts-only summary of the three-day plan for managers: on-time and finished rings, outcomes per due day, cumulative due/planned/finished curves, plan versus actual per line, the most overdue orders and hours per line. It reads the active plan, refreshes every minute and prints to PDF.
 
 For demos the floor page has **Simulate shift (demo)**: it records a plausible, seeded duty shift (starts a little late or early, runs a little long or short, follow-ups after their parent) up to the current time, so the floor page and the report have data without anyone clicking through every order. Events are logged as "Demo engineer".
+
+### Replan from now
+
+Once the floor has recorded progress, **Replan from now** (scheduling page) builds a new scenario from what is left: finished orders drop out, a running order keeps its lines busy until its planned length has passed (never less than one more unit), its follow-up waits for it, and everything not started is scheduled again from the current time on the same time axis. Solve it, check the result, then **Release to floor**: finished and running orders stay on the floor page and in the report with their real times, the rest follows the new plan. The old plan is kept, read-only. Rules live in `services/replan_rules.py` (pure and unit-tested).

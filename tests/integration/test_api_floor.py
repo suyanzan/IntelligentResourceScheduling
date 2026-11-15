@@ -173,3 +173,47 @@ def test_simulated_shift_records_plausible_actuals_up_to_now(client: TestClient)
     events = client.get(f"/api/floor/plans/{plan['id']}/events").json()
     assert {e["actor"] for e in events} >= {"Demo engineer"}
     assert client.post(f"/api/floor/plans/{plan['id']}/simulate").status_code == 200
+
+
+def test_replan_keeps_finished_and_running_orders_and_plans_the_rest(client: TestClient) -> None:
+    _, run = solved_run(client)
+    plan = release(client, run["id"])
+    simulated = client.post(f"/api/floor/plans/{plan['id']}/simulate").json()
+    started = {j["id"] for j in simulated["jobs"] if j["status"] != "planned"}
+    assert started, "the simulated shift should have started something"
+    open_ids = {j["id"] for j in simulated["jobs"] if j["status"] == "planned"}
+
+    created = client.post(f"/api/floor/plans/{plan['id']}/replan")
+    assert created.status_code == 201, created.text
+    scenario = created.json()
+    planned = {j["id"] for j in scenario["instance"]["jobs"]}
+    assert planned == open_ids  # nothing that was started is planned again
+    assert "replan" in scenario["name"]
+    for line in scenario["instance"]["resources"]:
+        assert line["windows"][0]["start"] > 0  # lines are only free from now on
+
+    replan_run = client.post(
+        f"/api/scenarios/{scenario['id']}/solve", json={"time_limit_s": 5, "no_idle": True}
+    ).json()
+    assert replan_run["status"] in ("OPTIMAL", "FEASIBLE")
+    second = release(client, replan_run["id"], released_by="Scheduler")
+
+    ids = {j["id"] for j in second["jobs"]}
+    assert ids == open_ids | started  # the whole plan is still on the floor
+    for j in second["jobs"]:
+        if j["id"] in started:
+            before = job(simulated, j["id"])
+            assert j["status"] == before["status"]
+            assert j["actual_start_at"] == before["actual_start_at"]
+            assert j["planned_start_at"] == before["planned_start_at"]
+        else:
+            assert j["status"] == "planned"
+    assert client.get(f"/api/floor/plans/{plan['id']}").json()["active"] is False
+    assert client.get("/api/floor/plan").json()["id"] == second["id"]
+
+
+def test_replan_needs_the_active_plan(client: TestClient) -> None:
+    _, run = solved_run(client)
+    old = release(client, run["id"])
+    release(client, run["id"])
+    assert client.post(f"/api/floor/plans/{old['id']}/replan").status_code == 409

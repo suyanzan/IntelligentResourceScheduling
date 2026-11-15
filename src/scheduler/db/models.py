@@ -65,6 +65,9 @@ class Scenario(Base):
     # cycle point.
     max_merge_capacity: Mapped[int | None]
     cycle_penalty: Mapped[int] = mapped_column(default=50, server_default="50")
+    # The released plan this scenario re-plans (set for "replan from now"); not a foreign key so
+    # old plans can be deleted without touching scenarios.
+    source_plan_id: Mapped[int | None]
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -301,6 +304,12 @@ class JobActual(Base):
     updated_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+    # Set when the job was carried over from the plan this one replaced: that plan's placement,
+    # in time units of this plan's scenario (a re-plan keeps the same start date and unit).
+    carried_start_unit: Mapped[int | None]
+    carried_end_unit: Mapped[int | None]
+    carried_due_unit: Mapped[int | None]
+    carried_lines: Mapped[str | None] = mapped_column(String(120))
 
     plan: Mapped[ReleasedPlan] = relationship(back_populates="actuals")
     job: Mapped[Job] = relationship()

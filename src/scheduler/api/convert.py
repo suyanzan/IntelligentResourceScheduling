@@ -250,14 +250,24 @@ def plan_detail(
     for a in plan.run.assignments:
         placed.setdefault(a.job_id, []).append(a)
 
-    lines = {a.resource.code: a.resource for a in plan.run.assignments}
+    lines = {r.code: r for r in scenario.resources}
+    lines.update({a.resource.code: a.resource for a in plan.run.assignments})
     jobs: list[schemas.FloorJobOut] = []
     for actual in plan.actuals:
         rows = placed.get(actual.job_id, [])
-        if not rows:
-            continue
         job = actual.job
-        first = rows[0]
+        if rows:
+            start_unit, end_unit = rows[0].start_unit, rows[0].end_unit
+            due_unit = job.due_unit
+            job_lines = sorted(r.resource.code for r in rows)
+        elif actual.carried_start_unit is not None and actual.carried_end_unit is not None:
+            start_unit, end_unit = actual.carried_start_unit, actual.carried_end_unit
+            due_unit = (
+                actual.carried_due_unit if actual.carried_due_unit is not None else job.due_unit
+            )
+            job_lines = [x for x in (actual.carried_lines or "").split(",") if x]
+        else:
+            continue
         jobs.append(
             schemas.FloorJobOut(
                 id=job.code,
@@ -271,10 +281,10 @@ def plan_detail(
                     if job.cycle_limit is None
                     else job.cycle_limit * scenario.time_unit_minutes
                 ),
-                due_at=at(job.due_unit),
-                planned_start_at=at(first.start_unit),
-                planned_end_at=at(first.end_unit),
-                lines=sorted(r.resource.code for r in rows),
+                due_at=at(due_unit),
+                planned_start_at=at(start_unit),
+                planned_end_at=at(end_unit),
+                lines=job_lines,
                 status=actual.status,  # type: ignore[arg-type]
                 actual_start_at=actual.actual_start,
                 actual_end_at=actual.actual_end,

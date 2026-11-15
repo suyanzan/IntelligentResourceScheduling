@@ -60,3 +60,4 @@ export const getPlanEvents = (planId) => request("GET", `/api/floor/plans/${plan
 export const floorAction = (planId, jobId, action, body) =>
   request("POST", `/api/floor/plans/${planId}/jobs/${encodeURIComponent(jobId)}/${action}`, body);
 export const simulateShift = (planId) => request("POST", `/api/floor/plans/${planId}/simulate`);
+export const replanPlan = (planId) => request("POST", `/api/floor/plans/${planId}/replan`);

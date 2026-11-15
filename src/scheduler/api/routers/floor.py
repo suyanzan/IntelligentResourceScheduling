@@ -9,7 +9,7 @@ from fastapi import APIRouter, Query
 from scheduler.api import convert, schemas
 from scheduler.api.deps import SessionDep, SettingsDep
 from scheduler.db import models as orm
-from scheduler.services import floor_demo
+from scheduler.services import floor_demo, scheduling_service
 from scheduler.services import floor_service as svc
 
 router = APIRouter(prefix="/api/floor", tags=["production floor"])
@@ -159,3 +159,21 @@ def simulate_shift(plan_id: int, session: SessionDep, settings: SettingsDep) -> 
             )
     session.commit()
     return _out(svc.get_plan(session, plan_id), settings)
+
+
+@router.post("/plans/{plan_id}/replan", status_code=201)
+def replan(plan_id: int, session: SessionDep, settings: SettingsDep) -> schemas.ScenarioDetail:
+    """A scenario with what is left of the plan, from now and from what really happened.
+
+    Solve it, check the result, then release it: finished and running orders stay on the floor.
+    """
+    scenario = svc.create_replan(
+        session,
+        plan_id,
+        now=dt.datetime.now(dt.UTC),
+        utc_offset_minutes=settings.plan_utc_offset_minutes,
+    )
+    session.commit()
+    return convert.scenario_detail(
+        scheduling_service.get_scenario(session, scenario.id), run_count=0
+    )

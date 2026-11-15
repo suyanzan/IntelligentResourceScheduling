@@ -11,7 +11,7 @@ import { createWatchBoard } from "./watch.js";
 
 const $ = (id) => document.getElementById(id);
 
-const state = { scenarios: [], scenario: null, runs: [], run: null, busy: false, mode: "single" };
+const state = { scenarios: [], scenario: null, runs: [], run: null, busy: false, mode: "single", floor: null };
 
 const tooltip = createTooltip();
 const gantt = createGantt($("gantt"), tooltip);
@@ -53,12 +53,15 @@ function setBusy(busy, label) {
   state.busy = busy;
   document.body.classList.toggle("is-loading", busy);
   document.body.setAttribute("aria-busy", String(busy));
-  for (const id of ["scenario-select", "run-select", "time-limit", "no-idle", "solve-btn", "generate-btn", "empty-generate-btn", "compare-btn", "watch-btn", "release-btn"]) {
+  for (const id of ["scenario-select", "run-select", "time-limit", "no-idle", "solve-btn", "generate-btn", "empty-generate-btn", "compare-btn", "watch-btn", "release-btn", "replan-btn"]) {
     const needsScenario = id !== "generate-btn" && id !== "empty-generate-btn";
     const noRuns = id === "run-select" && state.runs.length === 0;
     $(id).disabled = busy || (needsScenario && !state.scenario) || noRuns;
   }
-  if (!busy) syncRelease();
+  if (!busy) {
+    syncRelease();
+    syncReplan();
+  }
   $("solve-btn").textContent = busy && label ? label : "Solve";
 }
 
@@ -208,6 +211,37 @@ function syncRelease() {
     : "Needs a solved run on a scenario with a start date";
 }
 
+// Re-plan what is left of the plan on the floor, from now and from what really happened.
+async function loadFloor() {
+  try {
+    state.floor = await api.getActivePlan();
+  } catch {
+    state.floor = null;
+  }
+  syncReplan();
+}
+
+function syncReplan() {
+  const ok = Boolean(state.floor?.active);
+  $("replan-btn").disabled = !ok;
+  $("replan-btn").title = ok
+    ? "Plan what is left from now, using what the floor has recorded"
+    : "Release a plan to the floor first";
+}
+
+$("replan-btn").addEventListener("click", () => {
+  const limit = Math.min(60, Math.max(1, Number($("time-limit").value) || 10));
+  guarded(`Re-planning, up to ${limit} s`, async () => {
+    const created = await api.replanPlan(state.floor.id);
+    await refreshScenarios(created.id);
+    const run = await api.solve(created.id, limit, $("no-idle").checked);
+    await selectScenario(created.id, run.id);
+    const notice = $("notice");
+    notice.textContent = `Planned the ${created.job_count} orders still to do. Check the schedule, then release it to the floor.`;
+    notice.hidden = false;
+  });
+});
+
 const releaseDialog = $("release-dialog");
 $("release-btn").addEventListener("click", () => {
   const run = state.run;
@@ -240,6 +274,7 @@ $("release-form").addEventListener("submit", (event) => {
     link.textContent = "Open the production floor";
     notice.append(link);
     notice.hidden = false;
+    await loadFloor();
   });
 });
 
@@ -294,4 +329,7 @@ $("gantt").addEventListener("pointerover", (event) => {
 });
 $("gantt").addEventListener("pointerleave", () => results.highlight(null));
 
-guarded(null, () => refreshScenarios());
+guarded(null, async () => {
+  await refreshScenarios();
+  await loadFloor();
+});
