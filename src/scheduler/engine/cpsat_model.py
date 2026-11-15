@@ -226,13 +226,13 @@ def _add_no_idle(
         for rid in job.eligible:
             covered: list[cp_model.IntVar] = []
             for other in problem.jobs:
-                used = uses.get((other.id, rid))
+                literal = uses.get((other.id, rid))
                 pair = pair_overlap.get((job.id, other.id))
-                if used is None or pair is None:
+                if literal is None or pair is None:
                     continue
                 part = model.new_int_var(0, horizon, f"cov_{job.id}_{other.id}_{rid}")
-                model.add(part == pair).only_enforce_if(used)
-                model.add(part == 0).only_enforce_if(used.negated())
+                model.add(part == pair).only_enforce_if(literal)
+                model.add(part == 0).only_enforce_if(literal.negated())
                 covered.append(part)
             for block_start, block_end in blocked_periods(resources[rid], horizon):
                 covered.append(
