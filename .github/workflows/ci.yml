@@ -24,8 +24,8 @@ jobs:
     env:
       TEST_DATABASE_URL: postgresql+psycopg://scheduler:scheduler@localhost:5432/scheduler_test
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: pip
@@ -37,3 +37,23 @@ jobs:
         run: mypy
       - name: Tests (pytest)
         run: pytest
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build and start the stack
+        run: docker compose up --build -d
+      - name: Smoke test
+        run: |
+          for i in $(seq 1 30); do
+            curl -fsS http://localhost:8000/api/health && break
+            sleep 2
+          done
+          curl -fsS http://localhost:8000/api/health
+          curl -fsS http://localhost:8000/ | grep -qi "<title>"
+          curl -fsS -X POST http://localhost:8000/api/data/generate \
+            -H 'Content-Type: application/json' -d '{"preset":"tiny"}' | grep -q '"id"'
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs

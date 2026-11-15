@@ -7,8 +7,8 @@ with a FastAPI backend and a D3.js dashboard.
 > synthetic, fictional data. It contains no proprietary algorithms, business rules, parameters
 > or data from any existing industrial scheduling system.
 
-**Status:** Phase 7 done (engine, seeded synthetic data, PostgreSQL persistence, REST API, D3
-dashboard served at `/`, and run comparison). Packaging (Docker, docs) is next.
+**Status:** Phases 0-8 done: engine, seeded synthetic data, PostgreSQL persistence, REST API, D3
+dashboard, run comparison, Docker packaging and a Render Blueprint (not deployed by default).
 
 ## Planned scope (MVP)
 
@@ -29,6 +29,24 @@ frontend (D3) -> api (FastAPI) -> services -> engine (OR-Tools only)
 ```
 
 The optimization engine (`src/scheduler/engine`) is independent of FastAPI and the database.
+
+## Quick start (Docker)
+
+```bash
+docker compose up --build
+```
+
+Open <http://localhost:8000>. Compose starts PostgreSQL, applies the migrations and serves the
+API and dashboard. The credentials in `docker-compose.yml` are for local use only.
+
+## Deploying to Render
+
+`render.yaml` is a Render Blueprint (a Docker web service plus a PostgreSQL database). Nothing is
+deployed until you do it: in the Render dashboard choose **New > Blueprint**, select this
+repository and apply. The container runs `alembic upgrade head` on every start and reads `PORT`
+and `DATABASE_URL` from the environment. Free-tier services sleep when idle and free databases
+expire, so use a paid plan for anything lasting. Solves run inside the request, so keep
+`MAX_TIME_LIMIT_S` modest (30 s by default in the Blueprint).
 
 ## Development
 
@@ -115,7 +133,15 @@ hover, and a table of jobs that moved. A winner is named only when both runs sol
 inputs with the same kind of objective; otherwise (a what-if with an extra line, say) the
 differences are shown without ranking. The API equivalent is `GET /api/compare?run_a=&run_b=`.
 
+## Model, assumptions and limitations
+
+The mathematical formulation, status semantics and assumptions are in
+[`docs/model.md`](docs/model.md). In short: single-resource non-preemptive jobs, discrete time,
+deterministic durations, no precedence or setup times, synchronous solving without a job queue,
+and no authentication (demo use). Not done: a secondary makespan objective, because it would
+change what OPTIMAL means.
+
 ## Roadmap
 
-Phases 0-8 are described in the planning document: skeleton, engine models and validation,
-CP-SAT model, synthetic data, database, API, frontend, scenario comparison, packaging.
+Phases 0-8 (skeleton, engine models and validation, CP-SAT model, synthetic data, database, API,
+frontend, run comparison, packaging) are complete.
