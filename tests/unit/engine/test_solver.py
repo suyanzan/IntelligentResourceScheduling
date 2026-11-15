@@ -184,9 +184,15 @@ def test_short_time_limit_never_overclaims() -> None:
         assert r.assignments == ()
     else:
         _assert_valid(p, r)
-        assert r.best_bound is not None and r.gap is not None
-        if r.status is SolveStatus.FEASIBLE:
-            assert r.gap > 0
+        if r.best_bound is None:
+            # The verified start schedule stands in when the solver found nothing in time: it is
+            # reported as FEASIBLE with no bound and no gap, never as OPTIMAL.
+            assert r.status is SolveStatus.FEASIBLE and r.gap is None
+            assert any("start schedule" in m for m in r.messages)
+        else:
+            assert r.gap is not None
+            if r.status is SolveStatus.FEASIBLE:
+                assert r.gap > 0
 
 
 def test_status_mapping() -> None:
