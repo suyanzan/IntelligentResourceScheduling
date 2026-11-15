@@ -55,7 +55,7 @@ def test_sample_data_starts_today_in_plant_time(client: TestClient) -> None:
     assert scenario["horizon_start"] in (before.date().isoformat(), after.date().isoformat())
     starts = {r["id"]: r["windows"][0]["start"] for r in scenario["instance"]["resources"]}
     assert starts["D"] in (before.hour, after.hour)  # free lines start at the current hour
-    assert starts["A"] == starts["D"] + 12  # the others finish the current order first
+    assert set(starts.values()) == {starts["D"]}  # every line is free at the start
 
 
 def test_no_plan_until_one_is_released(client: TestClient) -> None:
