@@ -37,6 +37,7 @@
       </label>
       <button id="generate-btn" type="button">Add sample</button>
     </form>
+    <button id="watch-btn" type="button" aria-pressed="false" disabled>Watch board</button>
     <button id="compare-btn" type="button" aria-pressed="false" disabled>Compare runs</button>
     <button id="theme-btn" type="button" aria-pressed="false">Dark mode</button>
   </header>
@@ -107,6 +108,59 @@
           </table>
         </div>
         <p class="table-empty" id="cmp-jobs-empty" hidden>No job changed between these runs.</p>
+      </div>
+    </section>
+
+    <section id="watch" hidden aria-labelledby="watch-title">
+      <h2 id="watch-title">Watch board</h2>
+      <p class="note" id="watch-none">Solve the scenario first. The board replays the schedule: move the clock to see what each line is doing and where every order stands.</p>
+      <div id="watch-body" hidden>
+        <div class="watch-clockbar panel">
+          <div class="watch-now">
+            <div class="label">Now</div>
+            <div class="value" id="watch-clock"></div>
+            <div class="note" id="watch-elapsed"></div>
+          </div>
+          <div class="watch-controls">
+            <button type="button" id="watch-start">Start</button>
+            <button type="button" id="watch-play" class="primary" aria-pressed="false">Play</button>
+            <button type="button" id="watch-end">End</button>
+            <label>Speed <select id="watch-speed"></select></label>
+          </div>
+          <input id="watch-now" type="range" min="0" max="100" step="1" value="0" aria-label="Current time in the plan">
+        </div>
+
+        <div id="watch-kpis" class="kpis watch-kpis"></div>
+
+        <h3>Lines</h3>
+        <ul id="watch-lines" class="line-cards"></ul>
+
+        <div class="results-head">
+          <h3>Orders by due date</h3>
+          <label class="check">Show
+            <select id="watch-filter">
+              <option value="all">all orders</option>
+              <option value="active">running and waiting</option>
+              <option value="running">running</option>
+              <option value="waiting">waiting</option>
+              <option value="pending">not arrived</option>
+              <option value="done">done</option>
+              <option value="late">late (planned)</option>
+            </select>
+          </label>
+        </div>
+        <div class="table-wrap">
+          <table id="watch-table">
+            <caption class="sr-only">Orders listed by due date with their status at the chosen time</caption>
+            <thead><tr>
+              <th scope="col">Due</th><th scope="col">Order</th><th scope="col">Status</th>
+              <th scope="col">Lines</th><th scope="col">Starts</th><th scope="col">Ends</th>
+              <th scope="col" class="num">Priority</th><th scope="col">Outlook</th>
+            </tr></thead>
+            <tbody id="watch-jobs"></tbody>
+          </table>
+        </div>
+        <p class="table-empty" id="watch-empty" hidden>No orders match this filter at this time.</p>
       </div>
     </section>
 

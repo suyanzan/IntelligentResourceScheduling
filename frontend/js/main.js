@@ -7,6 +7,7 @@ import { createGantt } from "./gantt.js";
 import { renderKpis, renderSolver, renderStatusLine, renderUtilization } from "./panels.js";
 import { buildRows, createResultsTable } from "./results.js";
 import { createTooltip } from "./tooltip.js";
+import { createWatchBoard } from "./watch.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -19,6 +20,8 @@ const results = createResultsTable($("results-body"), {
     gantt.highlight(jobId);
   },
 });
+
+const watch = createWatchBoard($("watch"));
 
 const compare = createCompareView($("compare"), tooltip, { run: (work) => guarded(null, work) });
 
@@ -50,7 +53,7 @@ function setBusy(busy, label) {
   state.busy = busy;
   document.body.classList.toggle("is-loading", busy);
   document.body.setAttribute("aria-busy", String(busy));
-  for (const id of ["scenario-select", "run-select", "time-limit", "no-idle", "solve-btn", "generate-btn", "empty-generate-btn", "compare-btn"]) {
+  for (const id of ["scenario-select", "run-select", "time-limit", "no-idle", "solve-btn", "generate-btn", "empty-generate-btn", "compare-btn", "watch-btn"]) {
     const needsScenario = id !== "generate-btn" && id !== "empty-generate-btn";
     const noRuns = id === "run-select" && state.runs.length === 0;
     $(id).disabled = busy || (needsScenario && !state.scenario) || noRuns;
@@ -92,8 +95,11 @@ function emptyMessage(run) {
 function render() {
   const { scenario, run } = state;
   $("empty").hidden = Boolean(scenario);
-  $("content").hidden = !scenario || state.mode === "compare";
-  if (!scenario) return;
+  $("content").hidden = !scenario || state.mode !== "single";
+  if (!scenario) {
+    watch.update(null, null);
+    return;
+  }
 
   const model = { horizonStart: scenario.horizon_start, minutes: scenario.time_unit_minutes };
   const assignments = run?.assignments ?? [];
@@ -110,6 +116,7 @@ function render() {
   renderUtilization($("util-body"), scenario, run);
   renderSolver($("solver-body"), run);
   results.update(buildRows(scenario, run), model);
+  watch.update(scenario, run);
   $("solve-btn").disabled = false;
 }
 
@@ -152,12 +159,17 @@ async function createSample() {
 function setMode(mode) {
   state.mode = mode;
   const comparing = mode === "compare";
+  const watching = mode === "watch";
   $("compare").hidden = !comparing;
-  $("content").hidden = comparing || !state.scenario;
+  $("watch").hidden = !watching;
+  $("content").hidden = mode !== "single" || !state.scenario;
   $("controls").inert = comparing;
   document.body.classList.toggle("is-compare", comparing);
   $("compare-btn").setAttribute("aria-pressed", String(comparing));
   $("compare-btn").textContent = comparing ? "Back to schedule" : "Compare runs";
+  $("watch-btn").setAttribute("aria-pressed", String(watching));
+  $("watch-btn").textContent = watching ? "Back to schedule" : "Watch board";
+  if (!watching) watch.stop();
   if (comparing) compare.refit();
 }
 
@@ -184,6 +196,8 @@ $("controls").addEventListener("submit", (event) => {
     await selectScenario(state.scenario.id, run.id);
   });
 });
+
+$("watch-btn").addEventListener("click", () => setMode(state.mode === "watch" ? "single" : "watch"));
 
 $("compare-btn").addEventListener("click", () => {
   if (state.mode === "compare") return setMode("single");

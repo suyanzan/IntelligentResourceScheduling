@@ -166,3 +166,11 @@ hours of arriving; each one that does not earns a cycle point. Every OPC order i
 AUTORP order (42% of its CPU-hours, same due date) that can start only after the OPC order ends.
 Every due date is today, tomorrow or the day after (the end of that day). A job may merge lines
 only up to 3000 CPUs in total. All data is fictional; see `docs/model.md`.
+
+### Watch board
+
+The **Watch board** button opens a monitoring view of a solved run. A "now" clock (slider, or
+Play with a speed choice) shows what every line is doing (running with progress and the next
+orders, idle, or busy until a given time) and where each order stands: done, running, waiting,
+or not arrived yet. Orders are listed by due date and can be filtered. The Job results table
+also starts sorted by due date.

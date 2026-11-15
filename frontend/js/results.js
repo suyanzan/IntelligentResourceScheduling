@@ -61,7 +61,7 @@ export function buildRows(scenario, run) {
 export function createResultsTable(root, { onHover }) {
   let rows = [];
   let model = { horizonStart: null, minutes: 60 };
-  let sort = { key: "start", dir: 1 };
+  let sort = { key: "due", dir: 1 };
   let lateOnly = false;
 
   function sorted() {
@@ -71,7 +71,8 @@ export function createResultsTable(root, { onHover }) {
       const x = col.value(a);
       const y = col.value(b);
       const order = typeof x === "string" ? x.localeCompare(y, undefined, { numeric: true }) : x - y;
-      return (order || a.name.localeCompare(b.name, undefined, { numeric: true })) * sort.dir;
+      const byStart = (a.start ?? Infinity) - (b.start ?? Infinity);
+      return (order || byStart || a.name.localeCompare(b.name, undefined, { numeric: true })) * sort.dir;
     });
   }
 

@@ -15,6 +15,8 @@ const ICONS = {
   alert: "M8 4v5M8 11.5v.5",
   cross: "M4.5 4.5l7 7M11.5 4.5l-7 7",
   help: "M6 6.2a2 2 0 113 1.7c-.7.4-1 .8-1 1.6M8 12v.5",
+  play: "M6.5 5.2l4 2.8-4 2.8z",
+  clock: "M8 4.8V8l2.2 1.4",
 };
 
 /** A 16px status icon: a ring with a glyph. Always paired with text, never colour alone. */
