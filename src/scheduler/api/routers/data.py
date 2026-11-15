@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import dataclasses
 import datetime as dt
 
 from fastapi import APIRouter
@@ -27,8 +26,8 @@ def generate_scenario(
 ) -> schemas.ScenarioDetail:
     """Create a scenario from fully fictional, seeded data (same request, same data).
 
-    The OPC presets start today (plant time): unit 0 is midnight today, the plan begins at the
-    current hour, and due dates fall on today, tomorrow and the day after.
+    The OPC presets start today (plant time): unit 0 is midnight today, orders arrive from
+    00:00, and due dates fall on today, tomorrow and the day after.
     """
     label: str
     horizon_start = SYNTHETIC_HORIZON_START
@@ -38,8 +37,6 @@ def generate_scenario(
         )
         horizon_start = local_now.date()
         opc_config = OPC_PRESETS[body.preset]
-        if opc_config.live:
-            opc_config = dataclasses.replace(opc_config, now_unit=local_now.hour)
         problem = generate_opc(opc_config)
         seed = opc_config.seed
         label = body.preset
