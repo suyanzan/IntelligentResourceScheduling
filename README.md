@@ -191,3 +191,5 @@ The **OPC live** sample covers exactly three days (today, tomorrow, the day afte
 ### Execution report
 
 `/report.html` is a charts-only summary of the three-day plan for managers: on-time and finished rings, outcomes per due day, cumulative due/planned/finished curves, plan versus actual per line, the most overdue orders and hours per line. It reads the active plan, refreshes every minute and prints to PDF.
+
+For demos the floor page has **Simulate shift (demo)**: it records a plausible, seeded duty shift (starts a little late or early, runs a little long or short, follow-ups after their parent) up to the current time, so the floor page and the report have data without anyone clicking through every order. Events are logged as "Demo engineer".

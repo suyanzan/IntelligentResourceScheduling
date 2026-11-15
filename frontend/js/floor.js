@@ -290,6 +290,7 @@ function render() {
   if (!state.plan) return;
   $("no-plan").hidden = true;
   $("plan").hidden = false;
+  $("demo-btn").hidden = !state.plan.active;
   const visible = visibleJobs();
   renderHeader();
   renderTiles(visible);
@@ -423,6 +424,20 @@ function setViewDay(value) {
 }
 $("view-day").addEventListener("change", () => setViewDay($("view-day").value));
 $("today-btn").addEventListener("click", () => setViewDay(null));
+$("demo-btn").addEventListener("click", async () => {
+  if (!state.plan?.active) return;
+  $("demo-btn").disabled = true;
+  try {
+    apply(await api.simulateShift(state.plan.id));
+    showAlert("");
+    render();
+    if ($("log").open) loadLog();
+  } catch (error) {
+    showAlert(error.message);
+  } finally {
+    $("demo-btn").disabled = false;
+  }
+});
 $("line-filter").addEventListener("change", render);
 $("hide-done").addEventListener("change", render);
 $("with-carry").addEventListener("change", render);

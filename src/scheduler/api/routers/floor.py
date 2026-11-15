@@ -9,6 +9,7 @@ from fastapi import APIRouter, Query
 from scheduler.api import convert, schemas
 from scheduler.api.deps import SessionDep, SettingsDep
 from scheduler.db import models as orm
+from scheduler.services import floor_demo
 from scheduler.services import floor_service as svc
 
 router = APIRouter(prefix="/api/floor", tags=["production floor"])
@@ -111,8 +112,50 @@ def note_job(
     session: SessionDep,
     settings: SettingsDep,
 ) -> schemas.PlanOut:
-    plan = svc.record_action(
-        session, plan_id, job_id, "note", actor=body.by, note=body.note
-    )
+    plan = svc.record_action(session, plan_id, job_id, "note", actor=body.by, note=body.note)
     session.commit()
     return _out(plan, settings)
+
+
+@router.post("/plans/{plan_id}/simulate")
+def simulate_shift(plan_id: int, session: SessionDep, settings: SettingsDep) -> schemas.PlanOut:
+    """Demo only: record a plausible duty shift up to now for orders not yet started."""
+    now = dt.datetime.now(dt.UTC)
+    current = _out(svc.get_plan(session, plan_id), settings)
+    jobs = [
+        floor_demo.DemoJob(
+            id=j.id,
+            planned_start=j.planned_start_at,
+            planned_end=j.planned_end_at,
+            due=j.due_at,
+            lines=tuple(j.lines),
+            after=j.after,
+            status=j.status,
+            actual_start=j.actual_start_at,
+            actual_end=j.actual_end_at,
+        )
+        for j in current.jobs
+    ]
+    for step in floor_demo.plan_shift(jobs, now, seed=plan_id):
+        svc.record_action(
+            session,
+            plan_id,
+            step.job_id,
+            "start",
+            at=step.start,
+            actor="Demo engineer",
+            note=step.note,
+            now=now,
+        )
+        if step.end is not None:
+            svc.record_action(
+                session,
+                plan_id,
+                step.job_id,
+                "complete",
+                at=step.end,
+                actor="Demo engineer",
+                now=now,
+            )
+    session.commit()
+    return _out(svc.get_plan(session, plan_id), settings)

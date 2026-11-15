@@ -149,3 +149,27 @@ def test_a_new_release_retires_the_old_plan(client: TestClient) -> None:
     assert old["active"] is False
     refused = client.post(f"/api/floor/plans/{first['id']}/jobs/{first['jobs'][0]['id']}/start")
     assert refused.status_code == 409 and "replaced" in refused.json()["detail"]
+
+
+def test_simulated_shift_records_plausible_actuals_up_to_now(client: TestClient) -> None:
+    _, run = solved_run(client)
+    plan = release(client, run["id"])
+    response = client.post(f"/api/floor/plans/{plan['id']}/simulate")
+    assert response.status_code == 200, response.text
+    out = response.json()
+    now = dt.datetime.fromisoformat(out["server_time"])
+    touched = [j for j in out["jobs"] if j["status"] != "planned"]
+    assert touched, "a plan that began at midnight should have progressed by now"
+    for j in touched:
+        assert dt.datetime.fromisoformat(j["actual_start_at"]) <= now
+        if j["status"] == "done":
+            assert dt.datetime.fromisoformat(j["actual_end_at"]) <= now
+    follow_ups = {j["id"]: j for j in out["jobs"] if j["after"]}
+    for j in follow_ups.values():
+        parent = job(out, j["after"])
+        if j["status"] != "planned":
+            assert parent["status"] == "done"
+            assert j["actual_start_at"] >= parent["actual_end_at"]
+    events = client.get(f"/api/floor/plans/{plan['id']}/events").json()
+    assert {e["actor"] for e in events} >= {"Demo engineer"}
+    assert client.post(f"/api/floor/plans/{plan['id']}/simulate").status_code == 200

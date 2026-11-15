@@ -59,3 +59,4 @@ export const getActivePlan = () => request("GET", "/api/floor/plan");
 export const getPlanEvents = (planId) => request("GET", `/api/floor/plans/${planId}/events`);
 export const floorAction = (planId, jobId, action, body) =>
   request("POST", `/api/floor/plans/${planId}/jobs/${encodeURIComponent(jobId)}/${action}`, body);
+export const simulateShift = (planId) => request("POST", `/api/floor/plans/${planId}/simulate`);
