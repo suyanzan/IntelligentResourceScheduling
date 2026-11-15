@@ -61,14 +61,14 @@ def test_bad_config_is_rejected(kwargs: dict[str, int]) -> None:
         OpcConfig(**kwargs)
 
 
-LIVE_HASH = "8971aae0d50ae62f959569fe1f1659a782441b9a6a222d917a7ea163dd052502"
+LIVE_HASH = "f1d13be6d74915e2c7c86b4162e05df2a720b9984d5505f608526e68ce9af259"
 
 
 def test_live_preset_golden_hash() -> None:
     assert instance_hash(generate_opc(OPC_PRESETS["opc_live"])) == LIVE_HASH
 
 
-def test_live_preset_has_autorp_diffusion_cap_and_busy_lines() -> None:
+def test_live_preset_has_autorp_diffusion_and_cap() -> None:
     problem = generate_opc(OPC_PRESETS["opc_live"])
     jobs = {j.id: j for j in problem.jobs}
     opc = [j for j in problem.jobs if j.id.startswith("O")]
@@ -83,7 +83,7 @@ def test_live_preset_has_autorp_diffusion_cap_and_busy_lines() -> None:
     assert diffusion and all(j.cycle_limit == 12 and j.release >= 1 for j in diffusion)
     assert all(j.cycle_limit is None and j.release == 0 for j in opc if not j.layer)
     starts = {r.id: r.windows[0].start for r in problem.resources}
-    assert starts == {"A": 36, "B": 36, "C": 36, "D": 0, "E": 0}
+    assert starts == {"A": 0, "B": 0, "C": 0, "D": 0, "E": 0}  # every line is free at the start
     assert {r.id: r.capacity for r in problem.resources} == {
         "A": 500, "B": 1000, "C": 1500, "D": 2000, "E": 1500
     }
@@ -104,7 +104,8 @@ def test_live_preset_start_schedule_is_valid_and_never_idles() -> None:
 def test_live_preset_can_start_later_in_the_day() -> None:
     from dataclasses import replace
 
-    config = replace(OPC_PRESETS["opc_live"], now_unit=19, busy_until=31)
+    busy = ("A", "B", "C")
+    config = replace(OPC_PRESETS["opc_live"], now_unit=19, busy_lines=busy, busy_until=31)
     problem = generate_opc(config)
     starts = {r.id: r.windows[0].start for r in problem.resources}
     assert starts == {"A": 31, "B": 31, "C": 31, "D": 19, "E": 19}
@@ -133,6 +134,14 @@ def test_live_preset_fits_in_three_days_whenever_it_starts(hour: int) -> None:
 
     from scheduler.engine.heuristic import best_start_schedule
 
-    config = replace(OPC_PRESETS["opc_live"], now_unit=hour, busy_until=hour + 12)
+    config = replace(OPC_PRESETS["opc_live"], now_unit=hour)
     problem = generate_opc(config)
     assert best_start_schedule(problem, no_idle=True) is not None
+
+
+def test_busy_lines_can_still_be_requested() -> None:
+    from dataclasses import replace
+
+    config = replace(OPC_PRESETS["opc_live"], busy_lines=("A", "B"), busy_until=20)
+    starts = {r.id: r.windows[0].start for r in generate_opc(config).resources}
+    assert starts == {"A": 20, "B": 20, "C": 0, "D": 0, "E": 0}

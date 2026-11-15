@@ -37,7 +37,6 @@ DIFFUSION_MAX_CPU_HOURS = 20_000  # DIFFUSION orders are small: one free line ca
 ARRIVAL_DAYS = 2  # DIFFUSION orders arrive during the first two days
 LIVE_HORIZON_UNITS = DUE_DAYS * UNITS_PER_DAY  # the live sample covers exactly three days
 LIVE_MAX_CPU_HOURS = 15_000  # three days of work must fit even when the plan starts late
-BUSY_LINES = ("A", "B", "C")  # lines still running the current order when the plan starts
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,8 +45,9 @@ class OpcConfig:
     num_jobs: int = 20
     num_days: int = 30
     maintenance: bool = False
-    live: bool = False  # AUTORP follow-ups, DIFFUSION arrivals, merge cap, lines busy at start
-    busy_until: int = 36  # live only: units until lines A, B and C finish the current order
+    live: bool = False  # AUTORP follow-ups, DIFFUSION arrivals, merge cap, optional busy lines
+    busy_lines: tuple[str, ...] = ()  # live only: lines still running an earlier order at the start
+    busy_until: int = 36  # live only: unit at which the busy lines become free
     now_unit: int = 0  # live only: the plan starts this many units after midnight of day 0
 
     def __post_init__(self) -> None:
@@ -122,7 +122,9 @@ def _generate_live(config: OpcConfig) -> ProblemInstance:
             name=f"Line {chr(ord('A') + i)}",
             windows=(
                 Window(
-                    config.busy_until if chr(ord("A") + i) in BUSY_LINES else config.now_unit,
+                    config.busy_until
+                    if chr(ord("A") + i) in config.busy_lines
+                    else config.now_unit,
                     horizon,
                 ),
             ),

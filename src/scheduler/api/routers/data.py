@@ -19,7 +19,6 @@ router = APIRouter(prefix="/api/data", tags=["synthetic data"])
 SYNTHETIC_HORIZON_START = dt.date(2026, 1, 5)
 
 # Hours the lines A, B and C still need for the order they are running when an OPC plan starts.
-BUSY_HOURS = 12
 
 
 @router.post("/generate", status_code=201)
@@ -40,9 +39,7 @@ def generate_scenario(
         horizon_start = local_now.date()
         opc_config = OPC_PRESETS[body.preset]
         if opc_config.live:
-            opc_config = dataclasses.replace(
-                opc_config, now_unit=local_now.hour, busy_until=local_now.hour + BUSY_HOURS
-            )
+            opc_config = dataclasses.replace(opc_config, now_unit=local_now.hour)
         problem = generate_opc(opc_config)
         seed = opc_config.seed
         label = body.preset

@@ -160,8 +160,7 @@ The dashboard has a **No idle lines** checkbox (on by default). When on, a line 
 ### OPC live scenario
 
 The default sample (`opc_live`) models a day on the farm. There are five lines (A 500, B 1,000,
-C 1,500, D 2,000 and E 1,500 CPUs). Lines A, B and C are still busy with the current order, D and
-E are free, and orders arrive over time. Some are DIFFUSION orders that should finish within 12
+C 1,500, D 2,000 and E 1,500 CPUs). All lines are free when the plan starts, and orders arrive over time. Some are DIFFUSION orders that should finish within 12
 hours of arriving; each one that does not earns a cycle point. Every OPC order is followed by an
 AUTORP order (42% of its CPU-hours, same due date) that can start only after the OPC order ends.
 Every due date is today, tomorrow or the day after (the end of that day). A job may merge lines
