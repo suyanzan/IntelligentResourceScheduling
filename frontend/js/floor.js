@@ -250,11 +250,16 @@ function renderGroups(visible) {
   container.replaceChildren();
   const groups = groupJobs(visible, anchorMs(), offset());
   if (state.viewDay) {
+    // One day picked: show only the orders due that day (plus, optionally, unfinished ones from before).
+    const keep = new Set(["today", ...($("with-carry").checked ? ["carry"] : [])]);
+    groups.splice(0, groups.length, ...groups.filter((g) => keep.has(g.key)));
     const label = (days) => dayFormat.format(new Date(anchorMs() + offset() * MIN + days * 86_400_000));
     const titles = { today: label(0), tomorrow: label(1), dayAfter: label(2) };
     for (const g of groups) if (titles[g.key]) g.title = titles[g.key];
   }
-  if (!groups.length) container.append(el("p", "muted", "No orders match this filter."));
+  if (!groups.length) {
+    container.append(el("p", "muted", state.viewDay ? "No orders are due on this day." : "No orders match this filter."));
+  }
   for (const group of groups) {
     const shown = hideDone ? group.jobs.filter((j) => j.status !== "done") : group.jobs;
     const section = el("details", "group");
@@ -412,13 +417,15 @@ function setViewDay(value) {
   state.viewDay = value || null;
   groupOpen.clear();
   $("view-day").value = state.viewDay ?? plantDay(nowMs(), offset());
-  $("today-btn").hidden = !state.viewDay || state.viewDay === plantDay(nowMs(), offset());
+  $("today-btn").hidden = !state.viewDay;
+  $("carry-row").hidden = !state.viewDay;
   render();
 }
 $("view-day").addEventListener("change", () => setViewDay($("view-day").value));
 $("today-btn").addEventListener("click", () => setViewDay(null));
 $("line-filter").addEventListener("change", render);
 $("hide-done").addEventListener("change", render);
+$("with-carry").addEventListener("change", render);
 
 tickClock();
 setInterval(tickClock, 1000);

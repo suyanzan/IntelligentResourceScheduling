@@ -19,12 +19,13 @@
     <div class="clock" aria-live="off"><span id="clock-time">--:--</span> <span id="clock-day"></span></div>
     <span class="spacer"></span>
     <label>Your name <input id="operator" type="text" maxlength="80" placeholder="Duty engineer" autocomplete="name"></label>
-    <label>Day <input id="view-day" type="date" title="Show orders due on this day; earlier unfinished orders are carried over"></label>
+    <label>Day <input id="view-day" type="date" title="Show only the orders due on this day"></label>
     <button id="today-btn" type="button" hidden>Today</button>
     <label>Line
       <select id="line-filter"><option value="">All lines</option></select>
     </label>
-    <label class="check"><input id="hide-done" type="checkbox" checked> Hide finished</label>
+    <label class="check" id="carry-row" hidden><input id="with-carry" type="checkbox" checked> Include carried over</label>
+    <label class="check"><input id="hide-done" type="checkbox"> Hide finished</label>
     <a class="button-link" href="./">Scheduling</a>
     <button id="theme-btn" type="button" aria-pressed="false">Dark mode</button>
   </header>

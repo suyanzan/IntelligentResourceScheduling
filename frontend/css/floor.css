@@ -57,7 +57,9 @@ body.floor { font-size: 15px; }
 }
 .order:last-child { border-bottom-left-radius: 8px; border-bottom-right-radius: 8px; }
 .order[data-status="running"] { border-left-color: var(--blue); }
-.order[data-status="done"] { border-left-color: var(--good); opacity: 0.85; }
+.order[data-status="done"] { border-left-color: var(--good); background: color-mix(in srgb, var(--good) 14%, var(--surface)); }
+.order[data-status="done"] .status, .order[data-status="done"] .order-name { color: color-mix(in srgb, var(--good) 65%, var(--ink)); }
+.order[data-status="done"] .order-variance { color: var(--ink-2); }
 .order[data-tone="warn"] { border-left-color: var(--warning); }
 .order[data-tone="bad"] { border-left-color: var(--critical); }
 .order-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; }
