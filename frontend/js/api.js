@@ -48,6 +48,6 @@ export const getScenario = (id) => request("GET", `/api/scenarios/${id}`);
 export const listRuns = (id) => request("GET", `/api/scenarios/${id}/runs`);
 export const getRun = (id) => request("GET", `/api/runs/${id}`);
 export const generate = (preset) => request("POST", "/api/data/generate", { preset });
-export const solve = (id, timeLimitSeconds) =>
-  request("POST", `/api/scenarios/${id}/solve`, { time_limit_s: timeLimitSeconds });
+export const solve = (id, timeLimitSeconds, noIdle = false) =>
+  request("POST", `/api/scenarios/${id}/solve`, { time_limit_s: timeLimitSeconds, no_idle: noIdle });
 export const compare = (runA, runB) => request("GET", `/api/compare?run_a=${runA}&run_b=${runB}`);

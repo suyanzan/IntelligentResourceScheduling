@@ -130,6 +130,11 @@ class SolveRequest(BaseModel):
     num_workers: int = Field(default=1, ge=1, le=16)
     random_seed: int = Field(default=0, ge=0)
     weighted: bool = True
+    no_idle: bool = Field(
+        default=False,
+        description="Keep every line busy while a job it can run has not started "
+        "(needs release times of 0).",
+    )
 
 
 class MetricsOut(BaseModel):
@@ -171,6 +176,7 @@ class RunSummary(BaseModel):
     num_workers: int
     random_seed: int
     weighted: bool
+    no_idle: bool
     input_hash: str
     solver_version: str
     messages: list[str]

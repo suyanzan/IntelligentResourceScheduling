@@ -50,7 +50,7 @@ function setBusy(busy, label) {
   state.busy = busy;
   document.body.classList.toggle("is-loading", busy);
   document.body.setAttribute("aria-busy", String(busy));
-  for (const id of ["scenario-select", "run-select", "time-limit", "solve-btn", "generate-btn", "empty-generate-btn", "compare-btn"]) {
+  for (const id of ["scenario-select", "run-select", "time-limit", "no-idle", "solve-btn", "generate-btn", "empty-generate-btn", "compare-btn"]) {
     const needsScenario = id !== "generate-btn" && id !== "empty-generate-btn";
     const noRuns = id === "run-select" && state.runs.length === 0;
     $(id).disabled = busy || (needsScenario && !state.scenario) || noRuns;
@@ -180,7 +180,7 @@ $("controls").addEventListener("submit", (event) => {
   const limit = Math.min(60, Math.max(1, Number($("time-limit").value) || 10));
   $("time-limit").value = String(limit);
   guarded(`Solving, up to ${limit} s`, async () => {
-    const run = await api.solve(state.scenario.id, limit);
+    const run = await api.solve(state.scenario.id, limit, $("no-idle").checked);
     await selectScenario(state.scenario.id, run.id);
   });
 });

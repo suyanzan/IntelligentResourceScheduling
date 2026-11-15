@@ -98,3 +98,13 @@ deterministic for a fixed seed with one worker; with several workers CP-SAT may 
 - Solving is synchronous inside the request (bounded by `MAX_TIME_LIMIT_S`); there is no job queue.
 - Large instances may return FEASIBLE or UNKNOWN within the time limit.
 - No authentication: the API is meant for a demo, not for multi-tenant use.
+
+## No-idle rule
+
+With `no_idle` on (the dashboard default), a line may not sit idle while an order it
+could run is still waiting. For each line, the busy time plus any maintenance before
+the latest start of an order that can use that line must fill the whole span from time 0
+to that start; idle time is only allowed after that point. The rule needs every release
+time to be 0 (otherwise the request is reported as MODEL_INVALID). The schedule is
+re-checked by an independent verifier. It can cost objective value compared with the
+unconstrained optimum, and the solver is seeded with a sequential all-lines heuristic.

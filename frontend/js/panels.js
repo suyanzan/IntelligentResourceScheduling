@@ -52,7 +52,7 @@ function objectiveName(run) {
 function explanation(run, minutes) {
   switch (run.status) {
     case "OPTIMAL":
-      return `No schedule has lower ${objectiveName(run)}. The solver proved this.`;
+      return `No schedule${run.no_idle ? " that keeps every line busy" : ""} has lower ${objectiveName(run)}. The solver proved this.`;
     case "FEASIBLE": {
       const gap = run.gap == null ? "" : ` The result is within ${fmtPercent(run.gap, 1)} of the best possible.`;
       return `This is the best schedule found within the time limit; it may not be the best that exists.${gap} A longer time limit can improve it.`;
@@ -151,6 +151,7 @@ export function renderSolver(root, run) {
   const facts = [];
   const objective = run.objective_value == null ? "none" : fmtNumber(run.objective_value);
   facts.push([`Objective (${objectiveName(run)})`, objective]);
+  facts.push(["No idle lines", run.no_idle ? "on: lines stay busy while orders wait" : "off"]);
   if (run.best_bound != null) facts.push(["Best possible value", fmtNumber(run.best_bound, 1)]);
   if (run.gap != null) facts.push(["Gap to best possible", fmtPercent(run.gap, 1)]);
   facts.push(["Solve time", `${run.wall_time_s.toFixed(2)} s of ${fmtNumber(run.time_limit_s)} s allowed`]);

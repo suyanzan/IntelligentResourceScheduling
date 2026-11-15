@@ -26,6 +26,7 @@ from sqlalchemy import (
     Table,
     Text,
     UniqueConstraint,
+    false,
     func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -178,6 +179,8 @@ class ScheduleRun(Base):
     num_workers: Mapped[int]
     random_seed: Mapped[int]
     weighted: Mapped[bool] = mapped_column(Boolean)
+    # The no-idle rule was enforced: no line idle while a job it can run had not started.
+    no_idle: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     input_hash: Mapped[str] = mapped_column(String(64))
     solver_version: Mapped[str] = mapped_column(String(32))
     messages: Mapped[list[str]] = mapped_column(JsonType, default=list)

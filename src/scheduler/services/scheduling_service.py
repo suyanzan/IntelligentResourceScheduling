@@ -219,6 +219,7 @@ def solve_scenario(
         num_workers=params.num_workers,
         random_seed=params.random_seed,
         weighted=params.weighted,
+        no_idle=params.no_idle,
         input_hash=instance_hash(problem),
         solver_version=version("ortools"),
         messages=list(result.messages),

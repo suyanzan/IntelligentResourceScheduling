@@ -129,6 +129,7 @@ def run_summary(run: orm.ScheduleRun) -> schemas.RunSummary:
         num_workers=run.num_workers,
         random_seed=run.random_seed,
         weighted=run.weighted,
+        no_idle=run.no_idle,
         input_hash=run.input_hash,
         solver_version=run.solver_version,
         messages=list(run.messages),

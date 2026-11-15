@@ -152,3 +152,7 @@ change what OPTIMAL means.
 
 Phases 0-8 (skeleton, engine models and validation, CP-SAT model, synthetic data, database, API,
 frontend, run comparison, packaging) are complete.
+
+### No idle lines
+
+The dashboard has a **No idle lines** checkbox (on by default). When on, a line stays busy until no order it can run is left to start. See `docs/model.md`.

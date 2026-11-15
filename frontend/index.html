@@ -21,6 +21,9 @@
       <label>Time limit
         <input id="time-limit" type="number" min="1" max="60" step="1" value="10"> s
       </label>
+      <label class="check" title="A line may not sit idle while an order it can run has not started">
+        <input id="no-idle" type="checkbox" checked> No idle lines
+      </label>
       <button id="solve-btn" type="submit" class="primary" disabled>Solve</button>
       <span class="spacer"></span>
       <label>Sample data

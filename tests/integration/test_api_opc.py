@@ -105,3 +105,47 @@ def test_comparison_shows_merged_lines_and_mean_delay(client: TestClient) -> Non
     assert body["metrics"]["mean_delay"] == {"a": 0.0, "b": 0.0, "change": 0.0}
     assert body["jobs"][0]["a"]["resource_id"] == "A+B"
     assert body["jobs"][0]["moved"] is False
+
+
+def line_gaps(rows: list[dict[str, Any]]) -> list[str]:
+    """Idle gaps (before the last start of any job) per line, from API assignment rows."""
+    last_start = max(r["start"] for r in rows)
+    gaps = []
+    for line in sorted({r["resource_id"] for r in rows}):
+        cursor = 0
+        for r in sorted((r for r in rows if r["resource_id"] == line), key=lambda r: r["start"]):
+            if r["start"] >= last_start:
+                break
+            if r["start"] > cursor:
+                gaps.append(f"{line}: idle {cursor}-{r['start']}")
+            cursor = max(cursor, r["end"])
+        if cursor < last_start:
+            gaps.append(f"{line}: idle {cursor}-{last_start}")
+    return gaps
+
+
+def test_no_idle_run_is_recorded_and_keeps_lines_busy(client: TestClient) -> None:
+    generated = client.post("/api/data/generate", json={"preset": "opc"}).json()
+    response = client.post(
+        f"/api/scenarios/{generated['id']}/solve", json={"time_limit_s": 20, "no_idle": True}
+    )
+    assert response.status_code == 201, response.text
+    run = response.json()
+    assert run["no_idle"] is True
+    assert run["status"] in ("OPTIMAL", "FEASIBLE")
+    rows = client.get(f"/api/runs/{run['id']}").json()["assignments"]
+    assert line_gaps(rows) == []
+    assert run["metrics"]["mean_delay"] < 20  # the start schedule alone is ~2.7 h
+
+
+def test_no_idle_is_off_by_default(client: TestClient) -> None:
+    run = solve(client, farm([opc_job("J1", 15_000, due=10)]))
+    assert run["no_idle"] is False
+
+
+def test_no_idle_with_release_times_is_reported_not_solved(client: TestClient) -> None:
+    job = opc_job("J1", 15_000, due=10) | {"release": 3}
+    run = solve(client, farm([job]), no_idle=True)
+    assert run["status"] == "MODEL_INVALID"
+    assert any("released at time 0" in m for m in run["messages"])
+    assert run["no_idle"] is True

@@ -91,6 +91,7 @@ def solve_scenario(
         num_workers=request.num_workers,
         random_seed=request.random_seed,
         weighted=request.weighted,
+        no_idle=request.no_idle,
     )
     run = svc.solve_scenario(session, scenario_id, params)
     session.commit()
