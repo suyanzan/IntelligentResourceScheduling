@@ -12,7 +12,7 @@ services:
           name: scheduling-db
           property: connectionString
       - key: MAX_TIME_LIMIT_S
-        value: "30"
+        value: "60"
 
 databases:
   - name: scheduling-db

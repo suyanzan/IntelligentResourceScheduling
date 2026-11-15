@@ -46,7 +46,7 @@ deployed until you do it: in the Render dashboard choose **New > Blueprint**, se
 repository and apply. The container runs `alembic upgrade head` on every start and reads `PORT`
 and `DATABASE_URL` from the environment. Free-tier services sleep when idle and free databases
 expire, so use a paid plan for anything lasting. Solves run inside the request, so keep
-`MAX_TIME_LIMIT_S` modest (30 s by default in the Blueprint).
+`MAX_TIME_LIMIT_S` modest (60 s in the Blueprint).
 
 ## Development
 
