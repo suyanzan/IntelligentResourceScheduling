@@ -10,7 +10,7 @@ Formulation (all times are integer units, windows are half-open):
 * ``e_j``      end of job ``j``; ``e_j = s_j + p_{j,o}`` when option ``o`` is chosen.
 * ``I[j,o,r]`` optional interval ``[s_j, s_j + p_{j,o})`` on resource ``r`` of option ``o``,
   present iff ``x[j, o]``.
-* ``T_j``      tardiness, ``T_j = max(0, e_j - due_j)`` (exact, so the objective never carries slack).
+* ``T_j``      tardiness, ``T_j = max(0, e_j - due_j)`` (exact: the objective has no slack).
 * ``C_j``      cycle point (only for jobs with a cycle limit): ``C_j`` is 1 exactly when
   ``e_j - release_j > cycle_limit_j``.
 
