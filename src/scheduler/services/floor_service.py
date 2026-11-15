@@ -18,7 +18,7 @@ RELEASABLE_STATUSES = ("OPTIMAL", "FEASIBLE")
 ACTIONS = ("start", "complete", "revert", "note")
 
 
-def _plan_query() -> Select[tuple[orm.ReleasedPlan]]:
+def _plan_query() -> Select[orm.ReleasedPlan]:
     return select(orm.ReleasedPlan).options(
         selectinload(orm.ReleasedPlan.scenario),
         selectinload(orm.ReleasedPlan.actuals).selectinload(orm.JobActual.job),
