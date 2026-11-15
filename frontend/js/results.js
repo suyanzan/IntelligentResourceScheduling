@@ -7,6 +7,7 @@ const COLUMNS = [
   { key: "name", label: "Job", num: false, value: (r) => r.name },
   { key: "line", label: "Lines", num: false, value: (r) => r.line ?? "" },
   { key: "work", label: "CPU-hours", num: true, value: (r) => r.work ?? -1 },
+  { key: "arrives", label: "Arrives", num: false, value: (r) => r.release },
   { key: "start", label: "Starts", num: false, value: (r) => r.start ?? Infinity },
   { key: "end", label: "Ends", num: false, value: (r) => r.end ?? Infinity },
   { key: "duration", label: "Duration", num: true, value: (r) => r.duration },
@@ -40,6 +41,12 @@ export function buildRows(scenario, run) {
       line: rows ? rows.map((r) => lines.get(r.resource_id) ?? r.resource_id).join(" + ") : null,
       merged: (rows?.length ?? 0) > 1,
       work: job.work ?? null,
+      release: job.release ?? 0,
+      layer: job.layer ?? "",
+      cycleLimit: job.cycle_limit ?? null,
+      overCycle: a?.over_cycle ?? false,
+      cycleUsed: a && job.cycle_limit != null ? a.end - (job.release ?? 0) : null,
+      after: job.after ?? null,
       start: a?.start ?? null,
       end: a?.end ?? null,
       duration: a ? a.end - a.start : job.work != null ? null : job.duration,
@@ -108,10 +115,12 @@ export function createResultsTable(root, { onHover }) {
       tr.addEventListener("pointerleave", () => onHover(null));
       const name = cell("td", r.name);
       name.append(cell("span", r.id, "job-id"));
+      if (r.layer) name.append(cell("span", r.layer, "layer-tag"));
       tr.append(
         name,
         cell("td", r.line ?? "Not scheduled"),
         cell("td", r.work == null ? "-" : fmtNumber(r.work), "num"),
+        cell("td", r.release > 0 ? fmtWhen(model, r.release) : r.after ? `after ${r.after}` : "-"),
         cell("td", r.start == null ? "-" : fmtWhen(model, r.start)),
         cell("td", r.end == null ? "-" : fmtWhen(model, r.end)),
         cell("td", r.duration == null ? "-" : fmtDuration(r.duration, model.minutes), "num"),
@@ -132,6 +141,18 @@ export function createResultsTable(root, { onHover }) {
         state.append(icon("check"), document.createTextNode("On time"));
       }
       tr.insertCell().append(state);
+      if (r.cycleLimit != null && r.cycleUsed != null) {
+        const cycle = document.createElement("span");
+        cycle.className = "state cycle";
+        cycle.dataset.tone = r.overCycle ? "late" : "ok";
+        const used = fmtDuration(r.cycleUsed, model.minutes);
+        const limit = fmtDuration(r.cycleLimit, model.minutes);
+        cycle.append(
+          icon(r.overCycle ? "alert" : "check"),
+          document.createTextNode(r.overCycle ? `Cycle ${used} > ${limit}: 1 point` : `Cycle ${used} \u2264 ${limit}`),
+        );
+        tr.cells[tr.cells.length - 1].append(cycle);
+      }
     }
     table.prepend(caption);
     root.append(table);

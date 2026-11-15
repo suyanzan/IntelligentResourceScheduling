@@ -150,3 +150,32 @@ def test_no_idle_with_a_release_time_is_solved(client: TestClient) -> None:
     assert run["no_idle"] is True
     rows = client.get(f"/api/runs/{run['id']}").json()["assignments"]
     assert min(r["start"] for r in rows) >= 3
+
+
+def test_live_preset_round_trips_and_solves_with_links_and_cycle_points(
+    client: TestClient,
+) -> None:
+    generated = client.post("/api/data/generate", json={"preset": "opc_live"}).json()
+    jobs = {j["id"]: j for j in generated["instance"]["jobs"]}
+    assert generated["instance"]["max_merge_capacity"] == 3000
+    assert jobs["R001"]["after"] == "O001"
+    assert any(j["layer"] == "DIFFUSION" and j["cycle_limit"] == 12 for j in jobs.values())
+
+    run = client.post(
+        f"/api/scenarios/{generated['id']}/solve", json={"time_limit_s": 20, "no_idle": True}
+    ).json()
+    assert run["status"] in ("OPTIMAL", "FEASIBLE")
+    assert run["metrics"]["cycle_points"] >= 0
+    rows = client.get(f"/api/runs/{run['id']}").json()["assignments"]
+    by_job: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        by_job.setdefault(row["job_id"], []).append(row)
+    for code, job in jobs.items():
+        if job["after"]:
+            assert by_job[code][0]["start"] >= by_job[job["after"]][0]["end"]
+        used = sum(
+            {"A": 500, "B": 1000, "C": 1500, "D": 2000}[r["resource_id"]] for r in by_job[code]
+        )
+        assert used <= 3000
+    flagged = {r["job_id"] for r in rows if r["over_cycle"]}
+    assert len(flagged) == run["metrics"]["cycle_points"]

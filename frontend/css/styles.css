@@ -225,6 +225,8 @@ tbody tr:hover, tbody tr.is-linked { background: color-mix(in srgb, var(--blue) 
 .state[data-tone="late"] svg { color: var(--critical); }
 .state[data-tone="ok"] svg { color: var(--good); }
 .state[data-tone="none"] { color: var(--ink-3); }
+.layer-tag { margin-left: 8px; padding: 1px 6px; border: 1px solid var(--line, currentColor); border-radius: 4px; font-size: 11px; letter-spacing: 0.04em; color: var(--ink-2); }
+.state.cycle { display: flex; margin-top: 2px; font-size: 12px; color: var(--ink-2); }
 .table-empty { padding: 18px 0; color: var(--ink-2); }
 
 /* --- tooltip ----------------------------------------------------------------------------------------- */

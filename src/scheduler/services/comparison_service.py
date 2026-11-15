@@ -45,6 +45,7 @@ def run_view(run: orm.ScheduleRun) -> comparison.RunView:
             makespan=run.metrics.makespan,
             utilization=dict(run.metrics.utilization),
             mean_delay=run.metrics.mean_delay,
+            cycle_points=run.metrics.cycle_points,
         )
     return comparison.RunView(
         run_id=run.id,

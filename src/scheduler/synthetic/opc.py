@@ -24,6 +24,16 @@ MIN_CPU_HOURS = 1_000
 MAX_CPU_HOURS = 150_000
 MAINTENANCE_UNITS = 12  # one maintenance block per line when maintenance is enabled
 
+# "Live" scenario: orders arrive over time, some in the DIFFUSION layer, each OPC order is
+# followed by an AUTORP order, and merging is capped.
+MERGE_CAP_CPUS = 3000  # a job may merge lines up to this many CPUs in total
+AUTORP_PERCENT = 42  # AUTORP work as a percentage of its OPC order's work
+CYCLE_LIMIT_UNITS = 12  # a DIFFUSION order should finish within 12 h of arriving
+DIFFUSION_PERCENT = 25  # share of OPC orders that are DIFFUSION
+DIFFUSION_MAX_CPU_HOURS = 20_000  # DIFFUSION orders are small: one free line can make 12 h
+ARRIVAL_DAYS = 8  # DIFFUSION orders arrive during the first days
+BUSY_LINES = ("A", "B", "C")  # lines still running the current order when the plan starts
+
 
 @dataclass(frozen=True, slots=True)
 class OpcConfig:
@@ -31,6 +41,8 @@ class OpcConfig:
     num_jobs: int = 20
     num_days: int = 30
     maintenance: bool = False
+    live: bool = False  # AUTORP follow-ups, DIFFUSION arrivals, merge cap, lines busy at start
+    busy_until: int = 36  # live only: units until lines A, B and C finish the current order
 
     def __post_init__(self) -> None:
         if self.num_jobs < 1:
@@ -39,7 +51,7 @@ class OpcConfig:
             raise ValueError("num_days must be at least 7")
 
 
-OPC_PRESETS: dict[str, OpcConfig] = {"opc": OpcConfig()}
+OPC_PRESETS: dict[str, OpcConfig] = {"opc": OpcConfig(), "opc_live": OpcConfig(live=True)}
 
 
 def _randint(rng: Random, low: int, high: int) -> int:
@@ -48,6 +60,8 @@ def _randint(rng: Random, low: int, high: int) -> int:
 
 def generate_opc(config: OpcConfig) -> ProblemInstance:
     """Generate a deterministic OPC-style instance from ``config``."""
+    if config.live:
+        return _generate_live(config)
     rng = Random(config.seed)
     horizon = config.num_days * UNITS_PER_DAY
 
@@ -90,3 +104,72 @@ def _make_job(
         priority=priority,
         work=work,
     )
+
+
+def _generate_live(config: OpcConfig) -> ProblemInstance:
+    """Orders that arrive over time, with AUTORP follow-ups and DIFFUSION cycle limits."""
+    rng = Random(config.seed)
+    horizon = config.num_days * UNITS_PER_DAY
+    resources = tuple(
+        Resource(
+            id=chr(ord("A") + i),
+            name=f"Line {chr(ord('A') + i)}",
+            windows=(
+                Window(config.busy_until if chr(ord("A") + i) in BUSY_LINES else 0, horizon),
+            ),
+            capacity=cpus,
+        )
+        for i, cpus in enumerate(LINE_CPUS)
+    )
+    ids = tuple(r.id for r in resources)
+
+    jobs: list[Job] = []
+    for index in range(config.num_jobs):
+        number = f"{index + 1:03d}"
+        diffusion = rng.random() * 100 < DIFFUSION_PERCENT
+        draw = rng.random()
+        priority = _randint(rng, 1, 5)
+        followup = 0
+        if diffusion:
+            work = MIN_CPU_HOURS + int(draw * (DIFFUSION_MAX_CPU_HOURS - MIN_CPU_HOURS))
+            release = _randint(rng, 1, ARRIVAL_DAYS * UNITS_PER_DAY)
+            due = release + CYCLE_LIMIT_UNITS + _randint(rng, 0, 72)
+        else:
+            work = MIN_CPU_HOURS + int(draw * draw * (MAX_CPU_HOURS - MIN_CPU_HOURS))
+            release = 0
+            followup = max(1, work * AUTORP_PERCENT // 100)
+            due = -(-(work + followup) // MERGE_CAP_CPUS) + _randint(rng, 0, horizon // 3)
+        jobs.append(
+            Job(
+                id=f"O{number}",
+                name=f"MaskOPCOrder {number}",
+                duration=0,
+                due=due,
+                eligible=ids,
+                priority=priority,
+                release=release,
+                work=work,
+                cycle_limit=CYCLE_LIMIT_UNITS if diffusion else None,
+                layer="DIFFUSION" if diffusion else "",
+            )
+        )
+        jobs.append(
+            Job(
+                id=f"R{number}",
+                name=f"AUTORP {number}",
+                duration=0,
+                due=due,
+                eligible=ids,
+                priority=priority,
+                work=max(1, work * AUTORP_PERCENT // 100),
+                after=f"O{number}",
+            )
+        )
+
+    problem = ProblemInstance(
+        horizon=horizon, resources=resources, jobs=tuple(jobs), max_merge_capacity=MERGE_CAP_CPUS
+    )
+    issues = validate_instance(problem)
+    if issues:  # pragma: no cover - guards against generator bugs
+        raise ValueError("generator produced an invalid instance: " + "; ".join(issues))
+    return problem

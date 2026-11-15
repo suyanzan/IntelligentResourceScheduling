@@ -107,6 +107,9 @@ export function renderKpis(root, run, model) {
     hero,
     tile("Total tardiness", fmtDuration(m.total_tardiness, model.minutes), late ? `across ${late} late ${late === 1 ? "job" : "jobs"}` : "no late jobs"),
     tile("Average delay", fmtHours(m.mean_delay ?? 0, model.minutes), "late hours \u00f7 all jobs"),
+    ...(run.assignments.some((a) => a.cycle_limit != null)
+      ? [tile("Cycle points", String(m.cycle_points ?? 0), "DIFFUSION orders over their time limit")]
+      : []),
     tile("Weighted tardiness", fmtNumber(m.weighted_tardiness), "tardiness times priority"),
     tile("Last job ends", fmtDuration(m.makespan, model.minutes), model.horizonStart ? fmtWhen(model, m.makespan) : "from the start"),
   );

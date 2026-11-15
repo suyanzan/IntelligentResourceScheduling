@@ -60,6 +60,10 @@ class Scenario(Base):
     horizon_units: Mapped[int]
     time_unit_minutes: Mapped[int] = mapped_column(default=60)
     seed: Mapped[int | None] = mapped_column(BigInteger)
+    # Largest total capacity a job may merge (None means no cap) and the objective cost of one
+    # cycle point.
+    max_merge_capacity: Mapped[int | None]
+    cycle_penalty: Mapped[int] = mapped_column(default=50, server_default="50")
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -153,6 +157,11 @@ class Job(Base):
     # Capacity-hours (e.g. CPU-hours). When set, the job may merge resources and
     # ``duration_units`` is 0 (the duration depends on the resources chosen).
     work: Mapped[int | None]
+    # Code of a job that must end before this one starts (e.g. AUTORP after its OPC order).
+    after_code: Mapped[str | None] = mapped_column(String(64))
+    # Units from release to end before a cycle point is given (e.g. 12 h for DIFFUSION).
+    cycle_limit: Mapped[int | None]
+    layer: Mapped[str] = mapped_column(String(64), default="", server_default="")
 
     scenario: Mapped[Scenario] = relationship(back_populates="jobs")
     eligible_resources: Mapped[list[Resource]] = relationship(secondary=job_eligible_resources)
@@ -236,5 +245,7 @@ class RunMetrics(Base):
     utilization: Mapped[dict[str, float]] = mapped_column(JsonType)
     # Sum of positive delays divided by the number of jobs.
     mean_delay: Mapped[float] = mapped_column(Float, default=0.0, server_default="0")
+    # Jobs that went over their cycle limit.
+    cycle_points: Mapped[int] = mapped_column(default=0, server_default="0")
 
     run: Mapped[ScheduleRun] = relationship(back_populates="metrics")

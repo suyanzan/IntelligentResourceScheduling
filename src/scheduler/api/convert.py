@@ -33,9 +33,14 @@ def to_problem(instance: schemas.InstanceIn) -> em.ProblemInstance:
                 priority=j.priority,
                 release=j.release,
                 work=j.work,
+                after=j.after,
+                cycle_limit=j.cycle_limit,
+                layer=j.layer,
             )
             for j in instance.jobs
         ),
+        max_merge_capacity=instance.max_merge_capacity,
+        cycle_penalty=instance.cycle_penalty,
     )
 
 
@@ -95,9 +100,14 @@ def scenario_detail(scenario: orm.Scenario, *, run_count: int) -> schemas.Scenar
                 priority=j.priority,
                 release=j.release_unit,
                 work=j.work,
+                after=j.after_code,
+                cycle_limit=j.cycle_limit,
+                layer=j.layer,
             )
             for j in scenario.jobs
         ],
+        max_merge_capacity=scenario.max_merge_capacity,
+        cycle_penalty=scenario.cycle_penalty,
     )
     return schemas.ScenarioDetail(**summary.model_dump(), instance=instance)
 
@@ -113,6 +123,7 @@ def _metrics(run: orm.ScheduleRun) -> schemas.MetricsOut | None:
         makespan=m.makespan,
         utilization=dict(m.utilization),
         mean_delay=m.mean_delay,
+        cycle_points=m.cycle_points,
     )
 
 
@@ -159,6 +170,12 @@ def run_detail(run: orm.ScheduleRun) -> schemas.RunDetail:
             tardiness=a.tardiness_units,
             delay=a.end_unit - a.job.due_unit,
             work=a.job.work,
+            release=a.job.release_unit,
+            layer=a.job.layer,
+            cycle_limit=a.job.cycle_limit,
+            over_cycle=a.job.cycle_limit is not None
+            and a.end_unit - a.job.release_unit > a.job.cycle_limit,
+            after=a.job.after_code,
             start_at=at(a.start_unit),
             end_at=at(a.end_unit),
         )

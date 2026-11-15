@@ -43,6 +43,15 @@ class JobIn(BaseModel):
         description="Capacity-hours (e.g. CPU-hours). The job may then use several eligible "
         "resources at once; its duration is ceil(work / total capacity of those resources).",
     )
+    after: str | None = Field(
+        default=None, description="Id of a job that must end before this one starts."
+    )
+    cycle_limit: int | None = Field(
+        default=None,
+        gt=0,
+        description="Units from release to end; going over it earns one cycle point.",
+    )
+    layer: str = Field(default="", max_length=64, description="Label such as DIFFUSION.")
 
     @model_validator(mode="after")
     def _duration_or_work(self) -> JobIn:
@@ -55,6 +64,10 @@ class InstanceIn(BaseModel):
     horizon: int = Field(gt=0, le=100_000)
     resources: list[ResourceIn] = Field(min_length=1, max_length=100)
     jobs: list[JobIn] = Field(min_length=1, max_length=1000)
+    max_merge_capacity: int | None = Field(
+        default=None, ge=1, description="Largest total capacity of the lines one job may merge."
+    )
+    cycle_penalty: int = Field(default=50, ge=0, description="Objective cost of a cycle point.")
 
 
 class ResourceOut(ResourceIn):
@@ -65,6 +78,8 @@ class InstanceOut(BaseModel):
     horizon: int
     resources: list[ResourceOut]
     jobs: list[JobIn]
+    max_merge_capacity: int | None = None
+    cycle_penalty: int = 50
 
 
 # --- scenarios ---------------------------------------------------------------------------------
@@ -87,7 +102,7 @@ class GenerateRequest(BaseModel):
     """Either a named ``preset`` or custom sizes (every custom field is optional)."""
 
     name: str | None = Field(default=None, min_length=1, max_length=200)
-    preset: Literal["tiny", "small", "medium", "opc"] | None = None
+    preset: Literal["tiny", "small", "medium", "opc", "opc_live"] | None = None
     seed: int | None = Field(default=None, ge=0)
     num_resources: int | None = Field(default=None, ge=1, le=20)
     num_jobs: int | None = Field(default=None, ge=1, le=200)
@@ -146,6 +161,9 @@ class MetricsOut(BaseModel):
     mean_delay: float = Field(
         description="Sum of positive delays divided by the number of jobs (early jobs count as 0)."
     )
+    cycle_points: int = Field(
+        default=0, description="Jobs that went over their cycle limit (one point each)."
+    )
 
 
 class AssignmentOut(BaseModel):
@@ -160,6 +178,11 @@ class AssignmentOut(BaseModel):
     tardiness: int
     delay: int = Field(description="end - due in units; negative when the job is early.")
     work: int | None = None
+    release: int = 0
+    layer: str = ""
+    cycle_limit: int | None = None
+    over_cycle: bool = Field(default=False, description="True when the cycle limit was exceeded.")
+    after: str | None = None
     start_at: dt.datetime | None = None
     end_at: dt.datetime | None = None
 

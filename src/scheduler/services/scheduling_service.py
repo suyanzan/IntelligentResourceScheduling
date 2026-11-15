@@ -62,6 +62,8 @@ def save_instance(
         horizon_units=problem.horizon,
         time_unit_minutes=time_unit_minutes,
         seed=seed,
+        max_merge_capacity=problem.max_merge_capacity,
+        cycle_penalty=problem.cycle_penalty,
     )
     session.add(scenario)
     _populate(scenario, problem)
@@ -89,6 +91,8 @@ def replace_instance(session: Session, scenario_id: int, problem: em.ProblemInst
     session.expire_all()
 
     scenario.horizon_units = problem.horizon
+    scenario.max_merge_capacity = problem.max_merge_capacity
+    scenario.cycle_penalty = problem.cycle_penalty
     _populate(scenario, problem)
     session.flush()
 
@@ -247,6 +251,7 @@ def solve_scenario(
             makespan=metrics.makespan,
             utilization=metrics.utilization,
             mean_delay=metrics.mean_delay,
+            cycle_points=metrics.cycle_points,
         )
 
     session.add(run)
@@ -322,6 +327,9 @@ def _populate(scenario: orm.Scenario, problem: em.ProblemInstance) -> None:
             priority=job.priority,
             release_unit=job.release,
             work=job.work,
+            after_code=job.after,
+            cycle_limit=job.cycle_limit,
+            layer=job.layer,
         )
         job_row.eligible_resources = [rows[resource_id] for resource_id in job.eligible]
         scenario.jobs.append(job_row)
@@ -347,7 +355,16 @@ def _to_instance(scenario: orm.Scenario) -> em.ProblemInstance:
             priority=row.priority,
             release=row.release_unit,
             work=row.work,
+            after=row.after_code,
+            cycle_limit=row.cycle_limit,
+            layer=row.layer,
         )
         for row in scenario.jobs
     )
-    return em.ProblemInstance(horizon=scenario.horizon_units, resources=resources, jobs=jobs)
+    return em.ProblemInstance(
+        horizon=scenario.horizon_units,
+        resources=resources,
+        jobs=jobs,
+        max_merge_capacity=scenario.max_merge_capacity,
+        cycle_penalty=scenario.cycle_penalty,
+    )

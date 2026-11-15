@@ -156,3 +156,12 @@ frontend, run comparison, packaging) are complete.
 ### No idle lines
 
 The dashboard has a **No idle lines** checkbox (on by default). When on, a line stays busy until no order it can run is left to start. See `docs/model.md`.
+
+### OPC live scenario
+
+The default sample (`opc_live`) models a day on the farm: lines A, B and C are still busy with
+the current order, D is free, orders arrive over time, and some are DIFFUSION orders that should
+finish within 12 hours of arriving (each one that does not earns a cycle point). Every OPC order
+is followed by an AUTORP order (42% of its CPU-hours, same due date) that can start only after the
+OPC order ends. A job may merge lines only up to 3000 CPUs in total. All data is fictional; see
+`docs/model.md`.

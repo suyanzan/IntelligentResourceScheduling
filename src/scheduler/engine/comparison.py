@@ -21,6 +21,7 @@ METRIC_KEYS = (
     "total_tardiness",
     "weighted_tardiness",
     "mean_delay",
+    "cycle_points",
     "makespan",
 )
 
@@ -102,6 +103,7 @@ def _metric_values(view: RunView) -> dict[str, float | None]:
         "total_tardiness": m.total_tardiness if m else None,
         "weighted_tardiness": m.weighted_tardiness if m else None,
         "mean_delay": m.mean_delay if m else None,
+        "cycle_points": m.cycle_points if m else None,
         "makespan": m.makespan if m else None,
     }
 
