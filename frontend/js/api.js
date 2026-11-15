@@ -51,3 +51,11 @@ export const generate = (preset) => request("POST", "/api/data/generate", { pres
 export const solve = (id, timeLimitSeconds, noIdle = false) =>
   request("POST", `/api/scenarios/${id}/solve`, { time_limit_s: timeLimitSeconds, no_idle: noIdle });
 export const compare = (runA, runB) => request("GET", `/api/compare?run_a=${runA}&run_b=${runB}`);
+
+// Production floor: the released plan and the staff's updates to it.
+export const releasePlan = (runId, releasedBy, note) =>
+  request("POST", "/api/floor/plans", { run_id: runId, released_by: releasedBy, note });
+export const getActivePlan = () => request("GET", "/api/floor/plan");
+export const getPlanEvents = (planId) => request("GET", `/api/floor/plans/${planId}/events`);
+export const floorAction = (planId, jobId, action, body) =>
+  request("POST", `/api/floor/plans/${planId}/jobs/${encodeURIComponent(jobId)}/${action}`, body);

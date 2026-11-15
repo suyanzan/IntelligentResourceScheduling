@@ -3,16 +3,19 @@
 import re
 from pathlib import Path
 
+import pytest
+
 FRONTEND = Path(__file__).resolve().parents[2] / "frontend"
 
 
-def test_index_references_exist() -> None:
-    html = (FRONTEND / "index.html").read_text(encoding="utf-8")
+@pytest.mark.parametrize("page", ["index.html", "floor.html"])
+def test_page_references_exist(page: str) -> None:
+    html = (FRONTEND / page).read_text(encoding="utf-8")
     refs = re.findall(r'(?:src|href)="([^"#]+)"', html)
-    assert refs, "index.html should reference scripts and styles"
+    assert refs, f"{page} should reference scripts and styles"
     for ref in refs:
         assert not ref.startswith(("http:", "https:", "//")), f"{ref}: use vendored files only"
-        assert (FRONTEND / ref).is_file(), f"index.html refers to missing file {ref}"
+        assert (FRONTEND / ref).is_file(), f"{page} refers to missing file {ref}"
 
 
 def test_module_imports_resolve() -> None:

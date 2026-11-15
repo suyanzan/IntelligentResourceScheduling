@@ -53,11 +53,12 @@ function setBusy(busy, label) {
   state.busy = busy;
   document.body.classList.toggle("is-loading", busy);
   document.body.setAttribute("aria-busy", String(busy));
-  for (const id of ["scenario-select", "run-select", "time-limit", "no-idle", "solve-btn", "generate-btn", "empty-generate-btn", "compare-btn", "watch-btn"]) {
+  for (const id of ["scenario-select", "run-select", "time-limit", "no-idle", "solve-btn", "generate-btn", "empty-generate-btn", "compare-btn", "watch-btn", "release-btn"]) {
     const needsScenario = id !== "generate-btn" && id !== "empty-generate-btn";
     const noRuns = id === "run-select" && state.runs.length === 0;
     $(id).disabled = busy || (needsScenario && !state.scenario) || noRuns;
   }
+  if (!busy) syncRelease();
   $("solve-btn").textContent = busy && label ? label : "Solve";
 }
 
@@ -194,6 +195,51 @@ $("controls").addEventListener("submit", (event) => {
   guarded(`Solving, up to ${limit} s`, async () => {
     const run = await api.solve(state.scenario.id, limit, $("no-idle").checked);
     await selectScenario(state.scenario.id, run.id);
+  });
+});
+
+// Release the selected run to the production floor.
+function syncRelease() {
+  const run = state.run;
+  const ok = Boolean(run && run.assignments?.length && state.scenario?.horizon_start);
+  $("release-btn").disabled = !ok;
+  $("release-btn").title = ok
+    ? "Send the selected run to the production floor"
+    : "Needs a solved run on a scenario with a start date";
+}
+
+const releaseDialog = $("release-dialog");
+$("release-btn").addEventListener("click", () => {
+  const run = state.run;
+  if (!run) return;
+  $("release-sub").textContent = `${state.scenario.name} · run #${run.id} (${run.status}), ${run.assignments.length} orders.`;
+  try {
+    $("release-by").value = localStorage.getItem("operator") ?? "";
+  } catch {
+    /* storage unavailable */
+  }
+  $("release-note").value = "";
+  releaseDialog.showModal();
+});
+$("release-cancel").addEventListener("click", () => releaseDialog.close());
+$("release-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const by = $("release-by").value.trim();
+  releaseDialog.close();
+  try {
+    localStorage.setItem("operator", by);
+  } catch {
+    /* storage unavailable */
+  }
+  guarded(null, async () => {
+    const plan = await api.releasePlan(state.run.id, by, $("release-note").value.trim());
+    const notice = $("notice");
+    notice.replaceChildren(`Released ${plan.jobs.length} orders to the floor. `);
+    const link = document.createElement("a");
+    link.href = "floor.html";
+    link.textContent = "Open the production floor";
+    notice.append(link);
+    notice.hidden = false;
   });
 });
 

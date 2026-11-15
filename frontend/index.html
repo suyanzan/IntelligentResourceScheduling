@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Resource scheduling</title>
   <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/floor.css">
   <script>
     try {
       var saved = localStorage.getItem("theme");
@@ -37,12 +38,29 @@
       </label>
       <button id="generate-btn" type="button">Add sample</button>
     </form>
+    <button id="release-btn" type="button" class="primary" disabled title="Send the selected run to the production floor">Release to floor</button>
+    <a class="button-link" href="floor.html">Production floor</a>
     <button id="watch-btn" type="button" aria-pressed="false" disabled>Watch board</button>
     <button id="compare-btn" type="button" aria-pressed="false" disabled>Compare runs</button>
     <button id="theme-btn" type="button" aria-pressed="false">Dark mode</button>
   </header>
 
   <div id="alert" role="alert" hidden></div>
+  <div id="notice" role="status" hidden></div>
+
+  <dialog id="release-dialog">
+    <form method="dialog" id="release-form">
+      <h3>Release to the production floor</h3>
+      <p class="note" id="release-sub"></p>
+      <label>Released by <input id="release-by" type="text" maxlength="80" autocomplete="name"></label>
+      <label>Note for the floor <textarea id="release-note" rows="3" maxlength="2000" placeholder="optional"></textarea></label>
+      <p class="note">This replaces the plan the floor is working from now. Progress already recorded stays in the old plan's history.</p>
+      <div class="dlg-actions">
+        <button type="button" id="release-cancel">Cancel</button>
+        <button type="submit" class="primary" id="release-ok">Release</button>
+      </div>
+    </form>
+  </dialog>
 
   <main id="main">
     <section id="empty" class="empty" hidden>

@@ -37,6 +37,8 @@ jobs:
         run: mypy
       - name: Tests (pytest)
         run: pytest
+      - name: Frontend logic tests (node)
+        run: node --test frontend/tests/*.test.mjs
 
   docker:
     runs-on: ubuntu-latest

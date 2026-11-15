@@ -174,3 +174,14 @@ Play with a speed choice) shows what every line is doing (running with progress 
 orders, idle, or busy until a given time) and where each order stands: done, running, waiting,
 or not arrived yet. Orders are listed by due date and can be filtered. The Job results table
 also starts sorted by due date.
+
+## Production floor dashboard
+
+`/floor.html` is the page for line staff. A scheduler picks a solved run and chooses **Release to floor**; the plan (three days of orders with planned lines and times, aligned to real dates) becomes the active plan. Staff then see, in plant time and refreshed every 30 s:
+
+- orders grouped by due day: **Carried over** (earlier days, not finished), Today, Tomorrow, Day after, later, so the next shift sees what the previous one left;
+- per order: planned versus actual start/finish and a plain-language variance (late start, overrun, ahead, past due);
+- per line: running order, next planned order, and flags when reality departs from the plan (late start, overrun, started out of sequence, follow-up waiting for its parent);
+- actions: **Start**, **Finish** (actual times editable), **Undo** (one step back), **Note** (delay reason), with an activity log.
+
+There is no login: the operator name is free text. Do not expose the page beyond the plant network without adding authentication. Frontend rules are unit-tested with `node --test frontend/tests/*.test.mjs`.

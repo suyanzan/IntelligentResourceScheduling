@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Production floor</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/floor.css">
+  <script>
+    try {
+      var saved = localStorage.getItem("theme");
+      if (saved === "light" || saved === "dark") document.documentElement.dataset.theme = saved;
+    } catch (e) { /* storage unavailable: follow the system setting */ }
+  </script>
+</head>
+<body class="floor">
+  <header class="bar">
+    <h1>Production floor</h1>
+    <div class="clock" aria-live="off"><span id="clock-time">--:--</span> <span id="clock-day"></span></div>
+    <span class="spacer"></span>
+    <label>Your name <input id="operator" type="text" maxlength="80" placeholder="Duty engineer" autocomplete="name"></label>
+    <label>Line
+      <select id="line-filter"><option value="">All lines</option></select>
+    </label>
+    <label class="check"><input id="hide-done" type="checkbox" checked> Hide finished</label>
+    <a class="button-link" href="./">Scheduling</a>
+    <button id="theme-btn" type="button" aria-pressed="false">Dark mode</button>
+  </header>
+
+  <div id="alert" role="alert" hidden></div>
+
+  <main id="floor-main">
+    <section id="no-plan" class="empty" hidden>
+      <h2>No plan has been released to the floor</h2>
+      <p>A scheduler releases a solved run from the scheduling page (Release to floor). It will appear here.</p>
+      <a class="button-link primary" href="./">Open scheduling</a>
+    </section>
+
+    <section id="plan" hidden>
+      <div class="plan-head">
+        <div>
+          <h2 id="plan-title"></h2>
+          <p id="plan-sub" class="muted"></p>
+        </div>
+        <div class="tiles" id="tiles"></div>
+      </div>
+
+      <section id="lines" aria-label="Lines: plan versus actual" class="lines"></section>
+      <div id="groups"></div>
+
+      <details id="log">
+        <summary>Activity log</summary>
+        <ol id="log-list"></ol>
+      </details>
+    </section>
+  </main>
+
+  <dialog id="dialog">
+    <form method="dialog" id="dialog-form">
+      <h3 id="dialog-title"></h3>
+      <p id="dialog-sub" class="muted"></p>
+      <label id="dlg-start-row">Actual start <input id="dlg-start" type="datetime-local"></label>
+      <label id="dlg-end-row">Actual finish <input id="dlg-end" type="datetime-local"></label>
+      <label id="dlg-note-row">Note / delay reason
+        <textarea id="dlg-note" rows="3" maxlength="2000" placeholder="e.g. waiting for AUTORP data, line maintenance"></textarea>
+      </label>
+      <p id="dlg-error" class="dlg-error" role="alert" hidden></p>
+      <div class="dlg-actions">
+        <button type="button" id="dlg-cancel">Cancel</button>
+        <button type="submit" id="dlg-ok" class="primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="js/floor.js"></script>
+</body>
+</html>
