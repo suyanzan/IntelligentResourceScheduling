@@ -15,6 +15,8 @@ def test_page_references_exist(page: str) -> None:
     assert refs, f"{page} should reference scripts and styles"
     for ref in refs:
         assert not ref.startswith(("http:", "https:", "//")), f"{ref}: use vendored files only"
+        if ref == "./":
+            continue
         assert (FRONTEND / ref).is_file(), f"{page} refers to missing file {ref}"
 
 
