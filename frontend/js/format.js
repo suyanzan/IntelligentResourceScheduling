@@ -18,6 +18,14 @@ export function fmtWhen(model, unit) {
   return date ? whenFormat.format(date) : `unit ${unit}`;
 }
 
+/** A due time: an end-of-day deadline reads "Tue 17 Nov, 24:00" rather than 00:00 on the next day. */
+export function fmtDue(model, unit) {
+  const perDay = (24 * 60) / model.minutes;
+  if (!model.horizonStart || unit <= 0 || unit % perDay !== 0) return fmtWhen(model, unit);
+  const last = unitDate(model, unit - 1);
+  return `${dayFormat.format(last)}, 24:00`;
+}
+
 export function fmtDay(model, unit, narrow) {
   const date = unitDate(model, unit);
   if (!date) return String(unit);

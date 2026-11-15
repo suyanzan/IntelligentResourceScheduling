@@ -1,7 +1,7 @@
 // Sortable job results table. Rows link to the Gantt chart: hovering a row highlights its bar.
 
 import { icon } from "./panels.js";
-import { fmtDuration, fmtNumber, fmtSigned, fmtWhen } from "./format.js";
+import { fmtDuration, fmtDue, fmtNumber, fmtSigned, fmtWhen } from "./format.js";
 
 const COLUMNS = [
   { key: "name", label: "Job", num: false, value: (r) => r.name },
@@ -125,7 +125,7 @@ export function createResultsTable(root, { onHover }) {
         cell("td", r.start == null ? "-" : fmtWhen(model, r.start)),
         cell("td", r.end == null ? "-" : fmtWhen(model, r.end)),
         cell("td", r.duration == null ? "-" : fmtDuration(r.duration, model.minutes), "num"),
-        cell("td", fmtWhen(model, r.due)),
+        cell("td", fmtDue(model, r.due)),
         cell("td", String(r.priority), "num"),
         cell("td", r.delay == null ? "-" : fmtSigned(r.delay, model.minutes), "num"),
       );

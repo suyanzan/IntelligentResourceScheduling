@@ -3,7 +3,7 @@
 // Closed periods (nights, weekends, maintenance) are shaded. Drag to pan, buttons or Ctrl+wheel
 // to zoom.
 
-import { closedPeriods, fmtDay, fmtDuration, fmtNumber, fmtWhen } from "./format.js";
+import { closedPeriods, fmtDay, fmtDue, fmtDuration, fmtNumber, fmtWhen } from "./format.js";
 
 const ROW_H = 54;
 const BAR_H = 22;
@@ -97,7 +97,7 @@ export function createGantt(root, tooltip) {
         ["Starts", fmtWhen(model, a.start)],
         ["Ends", fmtWhen(model, a.end)],
         ["Duration", fmtDuration(a.end - a.start, model.minutes)],
-        ["Due", fmtWhen(model, a.due)],
+        ["Due", fmtDue(model, a.due)],
         ["Priority", String(a.priority)],
         late
           ? ["Status", `Late by ${fmtDuration(a.tardiness, model.minutes)}`, "late"]
