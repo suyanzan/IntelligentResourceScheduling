@@ -64,7 +64,7 @@ def generate_opc(config: OpcConfig) -> ProblemInstance:
 
 
 def _make_line(rng: Random, index: int, cpus: int, horizon: int, config: OpcConfig) -> Resource:
-    windows = (Window(0, horizon),)
+    windows: tuple[Window, ...] = (Window(0, horizon),)
     if config.maintenance:
         start = _randint(rng, 24, horizon - 24 - MAINTENANCE_UNITS)
         windows = (Window(0, start), Window(start + MAINTENANCE_UNITS, horizon))
