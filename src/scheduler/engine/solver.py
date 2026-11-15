@@ -10,7 +10,7 @@ from __future__ import annotations
 from ortools.sat.python import cp_model
 
 from scheduler.engine.cpsat_model import BuiltModel, build_model
-from scheduler.engine.heuristic import sequential_merge_schedule
+from scheduler.engine.heuristic import best_start_schedule
 from scheduler.engine.metrics import objective_value, verify_schedule
 from scheduler.engine.models import (
     Assignment,
@@ -46,13 +46,6 @@ def validate_params(params: SolveParams) -> list[str]:
     return issues
 
 
-def validate_no_idle(problem: ProblemInstance, params: SolveParams) -> list[str]:
-    """The no-idle rule is only defined when nothing is released after time 0."""
-    if params.no_idle and any(job.release > 0 for job in problem.jobs):
-        return ["the no-idle rule needs every job to be released at time 0"]
-    return []
-
-
 def solve(problem: ProblemInstance, params: SolveParams | None = None) -> SolveResult:
     """Solve ``problem`` and return a verified :class:`SolveResult`."""
     params = params or SolveParams()
@@ -60,7 +53,6 @@ def solve(problem: ProblemInstance, params: SolveParams | None = None) -> SolveR
     issues = [
         *validate_instance(problem),
         *validate_params(params),
-        *validate_no_idle(problem, params),
     ]
     if issues:
         return SolveResult(status=SolveStatus.MODEL_INVALID, messages=tuple(issues))
@@ -96,8 +88,8 @@ def solve(problem: ProblemInstance, params: SolveParams | None = None) -> SolveR
 def _add_start_hint(problem: ProblemInstance, built: BuiltModel, params: SolveParams) -> None:
     """Give the solver a valid starting schedule when a cheap heuristic applies. A hint never
     changes what is feasible or optimal; it only lets the search start from a good solution."""
-    schedule = sequential_merge_schedule(problem, weighted=params.weighted)
-    if schedule is None or verify_schedule(problem, schedule, no_idle=params.no_idle):
+    schedule = best_start_schedule(problem, weighted=params.weighted, no_idle=params.no_idle)
+    if schedule is None:
         return
     used: dict[str, set[str]] = {}
     starts: dict[str, int] = {}

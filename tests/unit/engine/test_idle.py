@@ -1,6 +1,6 @@
 """The no-idle rule and the start-schedule heuristic (pure Python, no solver)."""
 
-from scheduler.engine.heuristic import sequential_merge_schedule
+from scheduler.engine.heuristic import dispatch_schedule, sequential_merge_schedule
 from scheduler.engine.metrics import idle_violations, objective_value, verify_schedule
 from scheduler.engine.models import Assignment, Job, ProblemInstance, Resource, Window
 from scheduler.synthetic.generator import preset
@@ -79,3 +79,64 @@ def test_heuristic_does_not_apply_to_ordinary_jobs_or_calendars() -> None:
     assert sequential_merge_schedule(preset("small")) is None
     maintenance = Resource("A", "A", (Window(0, 40), Window(50, 100)), capacity=500)
     assert sequential_merge_schedule(problem(opc("J1", 500), resources=(maintenance,))) is None
+
+
+def test_a_line_may_idle_before_a_release_but_not_while_a_job_waits() -> None:
+    late = Job("J", "J", duration=0, due=50, eligible=("A", "B"), work=500, release=5)
+    p = problem(late)
+    assert verify_schedule(p, [Assignment("J", "A", 5, 6)], no_idle=True) == []
+    waiting = [Assignment("J", "A", 8, 9)]  # available at 5, starts at 8, A idle during [5, 8)
+    found = idle_violations(p, waiting)
+    assert any("'A' is idle during [5, 8)" in v for v in found)
+    assert any("'B' is idle during [5, 8)" in v for v in found)
+
+
+def test_a_job_that_comes_after_another_waits_from_its_end() -> None:
+    first = opc("J1", 500)
+    second = Job("J2", "J2", duration=0, due=50, eligible=("A",), work=500, after="J1")
+    p = problem(first, second)
+    ok = [Assignment("J1", "A", 0, 1), Assignment("J2", "A", 1, 2)]
+    assert verify_schedule(p, ok, no_idle=True) == []
+    gap = [Assignment("J1", "A", 0, 1), Assignment("J2", "A", 3, 4)]
+    assert any("'A' is idle during [1, 3)" in v for v in idle_violations(p, gap))
+
+
+def test_dispatch_schedule_is_valid_work_conserving_and_respects_links_and_cap() -> None:
+    lines = tuple(
+        Resource(code, code, (Window(0, 300),), capacity=cap)
+        for code, cap in (("A", 500), ("B", 1000), ("C", 1500), ("D", 2000))
+    )
+    eligible = ("A", "B", "C", "D")
+    jobs = (
+        Job("O1", "O1", duration=0, due=40, eligible=eligible, work=30_000, priority=3),
+        Job("R1", "R1", duration=0, due=40, eligible=eligible, work=12_600, after="O1"),
+        Job("O2", "O2", duration=0, due=60, eligible=eligible, work=20_000, priority=2),
+    )
+    p = ProblemInstance(horizon=300, resources=lines, jobs=jobs, max_merge_capacity=3000)
+    schedule = dispatch_schedule(p)
+    assert schedule is not None
+    assert verify_schedule(p, schedule, no_idle=True) == []
+    ends = {a.job_id: a.end for a in schedule}
+    starts = {a.job_id: a.start for a in schedule}
+    assert starts["R1"] >= ends["O1"]
+    for job_id in ("O1", "O2", "R1"):
+        used = [a.resource_id for a in schedule if a.job_id == job_id]
+        assert sum(p.resource_by_id()[r].capacity for r in used) <= 3000
+
+
+def test_dispatch_schedule_gives_a_diffusion_job_a_free_line() -> None:
+    busy = tuple(
+        Resource(c, c, (Window(40, 300),), capacity=cap)
+        for c, cap in (("A", 500), ("B", 1000), ("C", 1500))
+    )
+    lines = (*busy, Resource("D", "D", (Window(0, 300),), capacity=2000))
+    eligible = ("A", "B", "C", "D")
+    diffusion = Job(
+        "DIFF", "DIFF", duration=0, due=200, eligible=eligible, work=20_000, release=10,
+        cycle_limit=12, layer="DIFFUSION",
+    )
+    p = ProblemInstance(horizon=300, resources=lines, jobs=(diffusion,), max_merge_capacity=3000)
+    schedule = dispatch_schedule(p)
+    assert schedule is not None
+    assert {a.resource_id for a in schedule} == {"D"}
+    assert (schedule[0].start, schedule[0].end) == (10, 20)

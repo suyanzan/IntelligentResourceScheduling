@@ -160,51 +160,85 @@ def _add_no_idle(
     ends: dict[str, cp_model.IntVar],
     options: dict[str, list[Option]],
 ) -> None:
-    """A resource may not be idle while a job it can run has not started.
+    """While a job waits, every resource it could use must be busy or closed.
 
-    For resource ``r`` let ``L`` be the latest start among the jobs that can use ``r``. Before
-    ``L`` some such job is still waiting, so ``r`` must be busy or closed for the whole of
-    ``[0, L)``. Busy time and closed time never overlap (``NoOverlap``), so this holds exactly
-    when ``busy(r) + closed(r)`` measured inside ``[0, L)`` equals ``L``. After ``L`` the
-    resource may idle. Jobs that cannot use ``r`` at all are ignored for ``r``.
+    Job ``j`` waits during ``[a_j, s_j)`` where ``a_j`` is its release time or the end of the job
+    it comes ``after`` (whichever is later). For each resource ``r`` that ``j`` is eligible for,
+    the time inside that window that ``r`` spends on other jobs, plus its closed periods inside
+    the window, must add up to the whole window. Intervals on one resource never overlap, so the
+    sum equals the window length exactly when ``r`` has no gap there.
     """
     horizon = problem.horizon
-    for resource in problem.resources:
-        rid = resource.id
-        uses: dict[str, cp_model.IntVar] = {}
-        for job in problem.jobs:
+    resources = problem.resource_by_id()
+
+    avail: dict[str, cp_model.IntVar | int] = {}
+    for job in problem.jobs:
+        if job.after is None:
+            avail[job.id] = job.release
+        else:
+            var = model.new_int_var(job.release, horizon, f"avail_{job.id}")
+            model.add_max_equality(var, [ends[job.after], job.release])
+            avail[job.id] = var
+
+    uses: dict[tuple[str, str], cp_model.IntVar] = {}
+    for job in problem.jobs:
+        for rid in job.eligible:
             literals = [o.literal for o in options[job.id] if rid in o.resource_ids]
             if not literals:
                 continue
             if len(literals) == 1:
-                uses[job.id] = literals[0]
+                uses[(job.id, rid)] = literals[0]
             else:
                 used = model.new_bool_var(f"uses_{job.id}_{rid}")
                 model.add(used == cp_model.LinearExpr.sum(literals))
-                uses[job.id] = used
-        if not uses:
-            continue
+                uses[(job.id, rid)] = used
 
-        last = model.new_int_var(0, horizon, f"last_start_{rid}")
-        model.add_max_equality(last, [starts[job_id] for job_id in uses])
+    def overlap(
+        low: cp_model.IntVar | int, high: cp_model.IntVar | int,
+        start: cp_model.IntVar | int, end: cp_model.IntVar | int, name: str,
+    ) -> cp_model.IntVar:
+        """Length of ``[low, high)`` that lies inside ``[start, end)``."""
+        left = model.new_int_var(0, horizon, f"l_{name}")
+        model.add_max_equality(left, [low, start])
+        right = model.new_int_var(0, horizon, f"r_{name}")
+        model.add_min_equality(right, [high, end])
+        gap = model.new_int_var(-horizon, horizon, f"g_{name}")
+        model.add(gap == right - left)
+        length = model.new_int_var(0, horizon, f"o_{name}")
+        model.add_max_equality(length, [gap, 0])
+        return length
 
-        covered: list[cp_model.IntVar] = []
-        for job_id, used in uses.items():
-            capped = model.new_int_var(0, horizon, f"capped_{job_id}_{rid}")
-            model.add_min_equality(capped, [ends[job_id], last])
-            busy = model.new_int_var(0, horizon, f"busy_{job_id}_{rid}")
-            model.add(busy == capped - starts[job_id]).only_enforce_if(used)
-            model.add(busy == 0).only_enforce_if(used.negated())
-            covered.append(busy)
+    pair_overlap: dict[tuple[str, str], cp_model.IntVar] = {}
+    for job in problem.jobs:
+        waiting_from = avail[job.id]
+        for other in problem.jobs:
+            if other.id == job.id or other.after == job.id:
+                continue  # a job that comes after ``job`` cannot run while ``job`` waits
+            if not any((other.id, rid) in uses for rid in job.eligible):
+                continue
+            pair_overlap[(job.id, other.id)] = overlap(
+                starts[other.id], ends[other.id], waiting_from, starts[job.id],
+                f"{job.id}_{other.id}",
+            )
 
-        for block_start, block_end in blocked_periods(resource, horizon):
-            span = block_end - block_start
-            gap = model.new_int_var(-horizon, horizon, f"gap_{rid}_{block_start}")
-            model.add(gap == last - block_start)
-            positive = model.new_int_var(0, horizon, f"pos_{rid}_{block_start}")
-            model.add_max_equality(positive, [gap, 0])
-            closed = model.new_int_var(0, span, f"closed_{rid}_{block_start}_len")
-            model.add_min_equality(closed, [positive, span])
-            covered.append(closed)
-
-        model.add(cp_model.LinearExpr.sum(covered) == last)
+    for job in problem.jobs:
+        window = starts[job.id] - avail[job.id]
+        for rid in job.eligible:
+            covered: list[cp_model.IntVar] = []
+            for other in problem.jobs:
+                used = uses.get((other.id, rid))
+                pair = pair_overlap.get((job.id, other.id))
+                if used is None or pair is None:
+                    continue
+                part = model.new_int_var(0, horizon, f"cov_{job.id}_{other.id}_{rid}")
+                model.add(part == pair).only_enforce_if(used)
+                model.add(part == 0).only_enforce_if(used.negated())
+                covered.append(part)
+            for block_start, block_end in blocked_periods(resources[rid], horizon):
+                covered.append(
+                    overlap(
+                        block_start, block_end, avail[job.id], starts[job.id],
+                        f"{job.id}_{rid}_{block_start}",
+                    )
+                )
+            model.add(cp_model.LinearExpr.sum(covered) == window)

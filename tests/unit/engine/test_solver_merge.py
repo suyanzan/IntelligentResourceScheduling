@@ -93,11 +93,21 @@ def test_no_idle_on_the_opc_sample_is_at_least_as_good_as_the_start_schedule() -
     assert result.objective <= objective_value(problem, start)
 
 
-def test_no_idle_needs_release_times_of_zero() -> None:
+def test_no_idle_allows_a_late_release_and_idles_only_until_it() -> None:
     late = Job("J", "J", duration=0, due=50, eligible=("A", "B"), work=1_000, release=5)
-    result = solve(
-        ProblemInstance(horizon=100, resources=(A, B), jobs=(late,)),
-        SolveParams(time_limit_s=5, no_idle=True),
-    )
-    assert result.status is SolveStatus.MODEL_INVALID
-    assert any("released at time 0" in m for m in result.messages)
+    problem = ProblemInstance(horizon=100, resources=(A, B), jobs=(late,))
+    result = solve(problem, SolveParams(time_limit_s=5, no_idle=True))
+    assert result.status is SolveStatus.OPTIMAL
+    assert min(a.start for a in result.assignments) == 5
+    assert verify_schedule(problem, result.assignments, no_idle=True) == []
+
+
+def test_no_idle_a_waiting_job_takes_a_free_line() -> None:
+    # J1 needs both lines for 2 units; J2 arrives at 1 and may use A or B. While J2 waits nothing
+    # it could use may idle, so it cannot wait for J1 to free just one line and leave the other.
+    j1 = opc("J1", 3_000, due=50)
+    j2 = Job("J2", "J2", duration=0, due=50, eligible=("A", "B"), work=500, release=1)
+    problem = ProblemInstance(horizon=100, resources=(A, B), jobs=(j1, j2))
+    result = solve(problem, SolveParams(time_limit_s=10, no_idle=True))
+    assert result.status in (SolveStatus.OPTIMAL, SolveStatus.FEASIBLE)
+    assert verify_schedule(problem, result.assignments, no_idle=True) == []

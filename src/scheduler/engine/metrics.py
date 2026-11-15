@@ -142,36 +142,52 @@ def compute_metrics(
 
 
 def idle_violations(problem: ProblemInstance, assignments: Sequence[Assignment]) -> list[str]:
-    """Check the no-idle rule: a resource may not be idle (while open) before the latest start
-    among the jobs that can use it. After that point it may idle freely."""
+    """Check the no-idle rule: while a job is waiting, none of the resources it could use may be
+    idle.
+
+    A job is waiting from the moment it is available (its release time, or the end of the job it
+    comes ``after``, whichever is later) until it starts. During that time every resource the
+    job is eligible for must be busy or closed. A resource may idle only when no job it can run
+    is waiting.
+    """
     violations: list[str] = []
+    seen: set[tuple[str, int, int]] = set()
     starts = {a.job_id: a.start for a in assignments}
-    for resource in problem.resources:
-        waiting = [
-            starts[j.id] for j in problem.jobs if resource.id in j.eligible and j.id in starts
-        ]
-        if not waiting:
+    ends = {a.job_id: a.end for a in assignments}
+    for job in problem.jobs:
+        if job.id not in starts:
             continue
-        last = max(waiting)
-        covered = sorted(
-            [(a.start, a.end) for a in assignments if a.resource_id == resource.id]
-            + blocked_periods(resource, problem.horizon)
-        )
-        cursor = 0
-        for start, end in covered:
-            if start >= last:
-                break
-            if start > cursor:
-                violations.append(
-                    f"resource {resource.id!r} is idle during [{cursor}, {start}) although a job "
-                    f"it can run starts only at {last}"
-                )
-            cursor = max(cursor, end)
-        if cursor < last:
-            violations.append(
-                f"resource {resource.id!r} is idle during [{cursor}, {last}) although a job "
-                f"it can run starts only at {last}"
+        available = job.release
+        if job.after is not None and job.after in ends:
+            available = max(available, ends[job.after])
+        start = starts[job.id]
+        if available >= start:
+            continue
+        for resource in problem.resources:
+            if resource.id not in job.eligible:
+                continue
+            covered = sorted(
+                [(a.start, a.end) for a in assignments if a.resource_id == resource.id]
+                + blocked_periods(resource, problem.horizon)
             )
+            cursor = available
+            gaps: list[tuple[int, int]] = []
+            for begin, finish in covered:
+                if begin >= start:
+                    break
+                if begin > cursor:
+                    gaps.append((cursor, begin))
+                cursor = max(cursor, finish)
+            if cursor < start:
+                gaps.append((cursor, start))
+            for gap_start, gap_end in gaps:
+                if (resource.id, gap_start, gap_end) in seen:
+                    continue
+                seen.add((resource.id, gap_start, gap_end))
+                violations.append(
+                    f"resource {resource.id!r} is idle during [{gap_start}, {gap_end}) although "
+                    f"job {job.id!r} could run on it and only starts at {start}"
+                )
     return violations
 
 

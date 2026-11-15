@@ -176,8 +176,8 @@ class SolveParams:
     num_workers: int = 1
     random_seed: int = 0
     weighted: bool = True
-    # Rule: a resource may not sit idle while a job it can run has not started yet. It may idle
-    # only after every job it could run has started. Needs every job's release time to be 0.
+    # Rule: a resource may not sit idle while a job it can run is waiting (already released, and
+    # its predecessor finished, but not started). It may idle only when nothing it can run waits.
     no_idle: bool = False
 
 

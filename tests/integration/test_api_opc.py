@@ -143,9 +143,10 @@ def test_no_idle_is_off_by_default(client: TestClient) -> None:
     assert run["no_idle"] is False
 
 
-def test_no_idle_with_release_times_is_reported_not_solved(client: TestClient) -> None:
+def test_no_idle_with_a_release_time_is_solved(client: TestClient) -> None:
     job = opc_job("J1", 15_000, due=10) | {"release": 3}
     run = solve(client, farm([job]), no_idle=True)
-    assert run["status"] == "MODEL_INVALID"
-    assert any("released at time 0" in m for m in run["messages"])
+    assert run["status"] in ("OPTIMAL", "FEASIBLE")
     assert run["no_idle"] is True
+    rows = client.get(f"/api/runs/{run['id']}").json()["assignments"]
+    assert min(r["start"] for r in rows) >= 3

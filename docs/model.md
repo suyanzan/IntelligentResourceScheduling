@@ -101,10 +101,20 @@ deterministic for a fixed seed with one worker; with several workers CP-SAT may 
 
 ## No-idle rule
 
-With `no_idle` on (the dashboard default), a line may not sit idle while an order it
-could run is still waiting. For each line, the busy time plus any maintenance before
-the latest start of an order that can use that line must fill the whole span from time 0
-to that start; idle time is only allowed after that point. The rule needs every release
-time to be 0 (otherwise the request is reported as MODEL_INVALID). The schedule is
-re-checked by an independent verifier. It can cost objective value compared with the
-unconstrained optimum, and the solver is seeded with a sequential all-lines heuristic.
+With `no_idle` on (the dashboard default), a line may not sit idle while a job it can run is
+waiting. A job waits from the moment it is available (its release time, or the end of the job it
+comes `after`) until it starts. Throughout that wait, every line the job is eligible for must be
+busy or closed (maintenance, or "busy until" time at the start). A line may idle only when no
+job it can run is waiting. The schedule is re-checked by an independent verifier. The rule can
+cost objective value compared with the unconstrained optimum. The solver is seeded with the
+better of two start schedules: running jobs one after another on all lines, and a
+work-conserving dispatch that starts the most urgent available job on the free lines at once.
+
+## Merge cap, successor jobs and cycle points
+
+* `max_merge_capacity` limits the combined capacity of the lines one job may merge (3000 means
+  A+B+C is allowed but C+D and A+B+C+D are not).
+* A job with `after` cannot start before that job ends (for example AUTORP after its OPC order).
+* A job with `cycle_limit` (units from its release to its end) is not forbidden to run longer;
+  each time it does it earns one cycle point, and every point adds `cycle_penalty` to the
+  objective. Points are reported in the metrics.
