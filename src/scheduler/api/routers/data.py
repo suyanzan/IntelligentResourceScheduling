@@ -20,6 +20,7 @@ SYNTHETIC_HORIZON_START = dt.date(2026, 1, 5)
 @router.post("/generate", status_code=201)
 def generate_scenario(body: schemas.GenerateRequest, session: SessionDep) -> schemas.ScenarioDetail:
     """Create a scenario from fully fictional, seeded data (same request, same data)."""
+    label: str
     if body.preset is not None:
         config = PRESETS[body.preset]
         label = body.preset
