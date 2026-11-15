@@ -32,6 +32,17 @@ export function fmtDuration(units, minutes) {
   return `${fmtNumber(total)} min`;
 }
 
+/** A signed length: "+10 h" (late), "−29 h" (early) or "0 h". */
+export function fmtSigned(units, minutes) {
+  if (units === 0) return "0 h";
+  return `${units > 0 ? "+" : "−"}${fmtDuration(Math.abs(units), minutes)}`;
+}
+
+/** A possibly fractional number of units as hours with one decimal, e.g. "3.3 h". */
+export function fmtHours(units, minutes) {
+  return `${fmtNumber((units * minutes) / 60, 1)} h`;
+}
+
 export function fmtPercent(ratio, digits = 0) {
   return `${(ratio * 100).toFixed(digits)}%`;
 }

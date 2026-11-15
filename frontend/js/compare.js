@@ -2,7 +2,7 @@
 // range, line utilization and a list of the jobs that changed. All differences are B minus A.
 
 import * as api from "./api.js";
-import { fmtDuration, fmtNumber, fmtPercent, fmtWhen, runLabel } from "./format.js";
+import { fmtDuration, fmtHours, fmtNumber, fmtPercent, fmtWhen, runLabel } from "./format.js";
 import { createGantt } from "./gantt.js";
 import { icon } from "./panels.js";
 
@@ -13,11 +13,12 @@ function el(tag, className, text) {
   return node;
 }
 
-const DURATION_KEYS = new Set(["total_tardiness", "makespan"]);
+const DURATION_KEYS = new Set(["total_tardiness", "makespan", "mean_delay"]);
 
 const KPI_ROWS = [
   { key: "on_time_rate", label: "Jobs on time", better: "higher" },
   { key: "total_tardiness", label: "Total tardiness", better: "lower" },
+  { key: "mean_delay", label: "Average delay", better: "lower" },
   { key: "weighted_tardiness", label: "Weighted tardiness", better: "lower" },
   { key: "makespan", label: "Last job ends", better: "lower" },
   { key: "objective", label: "Objective", better: "lower" },
@@ -31,6 +32,7 @@ function sign(n) {
 function valueText(key, value, minutes) {
   if (value == null) return "–";
   if (key === "on_time_rate") return fmtPercent(value);
+  if (key === "mean_delay") return fmtHours(value, minutes);
   if (DURATION_KEYS.has(key)) return fmtDuration(value, minutes);
   return fmtNumber(value);
 }
@@ -44,8 +46,15 @@ function changeOf(key, delta, minutesA, minutesB) {
     return { text: points === 0 ? "no change" : `${sign(diff)}${points} pp`, diff: points === 0 ? 0 : diff };
   }
   if (diff === 0) return { text: "no change", diff: 0 };
-  const size = DURATION_KEYS.has(key) ? fmtDuration(Math.abs(diff), 1) : fmtNumber(Math.abs(diff), 1);
+  const size = key === "mean_delay"
+    ? fmtHours(Math.abs(diff), 1)
+    : DURATION_KEYS.has(key) ? fmtDuration(Math.abs(diff), 1) : fmtNumber(Math.abs(diff), 1);
   return { text: `${sign(diff)}${size}`, diff };
+}
+
+/** Line names for a placement id such as "A" or "A+B" (a job that merges lines). */
+function lineText(names, id) {
+  return id.split("+").map((part) => names.get(part) ?? part).join(" + ");
 }
 
 function verdictWord(diff, better) {
@@ -218,7 +227,7 @@ export function createCompareView(root, tooltip, { run }) {
     if (!job.a) return "Only scheduled in run B";
     if (!job.b) return "Only scheduled in run A";
     if (job.a.resource_id !== job.b.resource_id) {
-      return `Moved from ${names.get(job.a.resource_id) ?? job.a.resource_id} to ${names.get(job.b.resource_id) ?? job.b.resource_id}`;
+      return `Moved from ${lineText(names, job.a.resource_id)} to ${lineText(names, job.b.resource_id)}`;
     }
     const shift = job.b.start * minutesB - job.a.start * minutesA;
     if (shift === 0) return "Unchanged";
@@ -234,7 +243,7 @@ export function createCompareView(root, tooltip, { run }) {
     const mb = { horizonStart: sb.horizon_start, minutes: sb.time_unit_minutes };
 
     const place = (p, model) =>
-      p ? `${names.get(p.resource_id) ?? p.resource_id}, ${fmtWhen(model, p.start)}${p.tardiness ? ` (late ${fmtDuration(p.tardiness, model.minutes)})` : ""}` : "–";
+      p ? `${lineText(names, p.resource_id)}, ${fmtWhen(model, p.start)}${p.tardiness ? ` (late ${fmtDuration(p.tardiness, model.minutes)})` : ""}` : "–";
 
     // Change in lateness in minutes (runs may use different time units).
     const lateness = (j) => (j.a && j.b ? j.b.tardiness * mb.minutes - j.a.tardiness * ma.minutes : null);

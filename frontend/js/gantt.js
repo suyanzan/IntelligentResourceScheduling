@@ -3,7 +3,7 @@
 // Closed periods (nights, weekends, maintenance) are shaded. Drag to pan, buttons or Ctrl+wheel
 // to zoom.
 
-import { closedPeriods, fmtDay, fmtDuration, fmtWhen } from "./format.js";
+import { closedPeriods, fmtDay, fmtDuration, fmtNumber, fmtWhen } from "./format.js";
 
 const ROW_H = 54;
 const BAR_H = 22;
@@ -87,10 +87,13 @@ export function createGantt(root, tooltip) {
 
   function tooltipContent(a) {
     const late = a.tardiness > 0;
+    // A job that merges lines has one bar per line; the tooltip lists them all.
+    const lines = model.assignments.filter((x) => x.job_id === a.job_id).map((x) => x.resource_name);
     return {
       title: `${a.job_name} (${a.job_id})`,
       rows: [
-        ["Line", a.resource_name],
+        [lines.length > 1 ? "Lines (merged)" : "Line", lines.join(" + ")],
+        ...(a.work != null ? [["CPU-hours", fmtNumber(a.work)]] : []),
         ["Starts", fmtWhen(model, a.start)],
         ["Ends", fmtWhen(model, a.end)],
         ["Duration", fmtDuration(a.end - a.start, model.minutes)],
@@ -142,7 +145,11 @@ export function createGantt(root, tooltip) {
           .attr("class", "row-sub")
           .attr("x", left - 12)
           .attr("dy", 15)
-          .text(`up to ${fmtDuration(resource.daily_capacity_units, model.minutes)} a day`);
+          .text(
+            resource.capacity > 1
+              ? `${fmtNumber(resource.capacity)} CPU`
+              : `up to ${fmtDuration(resource.daily_capacity_units, model.minutes)} a day`,
+          );
       }
 
       for (const a of byResource.get(resource.id) ?? []) {

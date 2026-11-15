@@ -127,6 +127,13 @@ periods, and a sortable job table. It follows the system light/dark setting, wor
 and the Gantt bars can be reached with the keyboard. Set `FRONTEND_DIR` to serve the files from
 another folder, or to an empty value to run the API only.
 
+**CPU-hour jobs and merged lines.** A job can be given `work` (for example CPU-hours) instead of
+a fixed duration, and lines can have a `capacity` (for example CPUs). Such a job may run on
+several lines at once; its duration is `ceil(work / total capacity)`. The "OPC compute farm"
+sample builds four lines (500 / 1,000 / 1,500 / 2,000 CPUs) and 20 orders of 1,000-150,000
+CPU-hours. The dashboard shows each order's signed delay (early orders keep a negative value) and
+the **average delay**: late hours divided by all orders. Details are in `docs/model.md`.
+
 **Comparing runs.** The "Compare runs" button puts two stored runs side by side: key figures with
 differences (B minus A), per-line utilization, two Gantt charts on a shared time axis with linked
 hover, and a table of jobs that moved. A winner is named only when both runs solved the same

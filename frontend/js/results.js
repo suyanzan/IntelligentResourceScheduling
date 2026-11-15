@@ -1,17 +1,18 @@
 // Sortable job results table. Rows link to the Gantt chart: hovering a row highlights its bar.
 
 import { icon } from "./panels.js";
-import { fmtDuration, fmtWhen } from "./format.js";
+import { fmtDuration, fmtNumber, fmtSigned, fmtWhen } from "./format.js";
 
 const COLUMNS = [
   { key: "name", label: "Job", num: false, value: (r) => r.name },
-  { key: "line", label: "Line", num: false, value: (r) => r.line ?? "" },
+  { key: "line", label: "Lines", num: false, value: (r) => r.line ?? "" },
+  { key: "work", label: "CPU-hours", num: true, value: (r) => r.work ?? -1 },
   { key: "start", label: "Starts", num: false, value: (r) => r.start ?? Infinity },
   { key: "end", label: "Ends", num: false, value: (r) => r.end ?? Infinity },
   { key: "duration", label: "Duration", num: true, value: (r) => r.duration },
   { key: "due", label: "Due", num: false, value: (r) => r.due },
   { key: "priority", label: "Priority", num: true, value: (r) => r.priority },
-  { key: "tardiness", label: "Tardiness", num: true, value: (r) => r.tardiness ?? -1 },
+  { key: "delay", label: "Delay", num: true, value: (r) => r.delay ?? -Infinity },
 ];
 
 function cell(tag, text, className) {
@@ -23,20 +24,29 @@ function cell(tag, text, className) {
 
 /** Combine the scenario's jobs with a run's assignments into table rows. */
 export function buildRows(scenario, run) {
-  const placed = new Map((run?.assignments ?? []).map((a) => [a.job_id, a]));
+  // A job that merges several lines has one assignment per line, all with the same span.
+  const placed = new Map();
+  for (const a of run?.assignments ?? []) {
+    if (!placed.has(a.job_id)) placed.set(a.job_id, []);
+    placed.get(a.job_id).push(a);
+  }
   const lines = new Map(scenario.instance.resources.map((r) => [r.id, r.name]));
   return scenario.instance.jobs.map((job) => {
-    const a = placed.get(job.id);
+    const rows = placed.get(job.id);
+    const a = rows?.[0];
     return {
       id: job.id,
       name: job.name,
-      line: a ? lines.get(a.resource_id) : null,
+      line: rows ? rows.map((r) => lines.get(r.resource_id) ?? r.resource_id).join(" + ") : null,
+      merged: (rows?.length ?? 0) > 1,
+      work: job.work ?? null,
       start: a?.start ?? null,
       end: a?.end ?? null,
-      duration: job.duration,
+      duration: a ? a.end - a.start : job.work != null ? null : job.duration,
       due: job.due,
       priority: job.priority,
       tardiness: a ? a.tardiness : null,
+      delay: a ? a.delay : null,
     };
   });
 }
@@ -71,7 +81,7 @@ export function createResultsTable(root, { onHover }) {
     const table = document.createElement("table");
     const caption = document.createElement("caption");
     caption.className = "sr-only";
-    caption.textContent = "Jobs with their scheduled times and tardiness";
+    caption.textContent = "Jobs with their scheduled times and delay (end minus due; negative means early)";
     const head = table.createTHead().insertRow();
     for (const col of COLUMNS) {
       const th = document.createElement("th");
@@ -101,12 +111,13 @@ export function createResultsTable(root, { onHover }) {
       tr.append(
         name,
         cell("td", r.line ?? "Not scheduled"),
+        cell("td", r.work == null ? "-" : fmtNumber(r.work), "num"),
         cell("td", r.start == null ? "-" : fmtWhen(model, r.start)),
         cell("td", r.end == null ? "-" : fmtWhen(model, r.end)),
-        cell("td", fmtDuration(r.duration, model.minutes), "num"),
+        cell("td", r.duration == null ? "-" : fmtDuration(r.duration, model.minutes), "num"),
         cell("td", fmtWhen(model, r.due)),
         cell("td", String(r.priority), "num"),
-        cell("td", r.tardiness == null ? "-" : fmtDuration(r.tardiness, model.minutes), "num"),
+        cell("td", r.delay == null ? "-" : fmtSigned(r.delay, model.minutes), "num"),
       );
       const state = document.createElement("span");
       state.className = "state";

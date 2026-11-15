@@ -25,6 +25,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
+from itertools import combinations
 
 
 class SolveStatus(StrEnum):
@@ -83,6 +84,19 @@ def duration_on(job: Job, resources: Sequence[Resource]) -> int:
         return job.duration
     total = sum(resource.capacity for resource in resources)
     return -(-job.work // total)
+
+
+def option_sets(job: Job, resources: dict[str, Resource]) -> list[tuple[Resource, ...]]:
+    """Resource sets a job may use: one per eligible resource, or every non-empty subset when
+    the job has ``work`` (so it may merge resources)."""
+    eligible = [resources[rid] for rid in job.eligible]
+    if job.work is None:
+        return [(resource,) for resource in eligible]
+    return [
+        subset
+        for size in range(1, len(eligible) + 1)
+        for subset in combinations(eligible, size)
+    ]
 
 
 @dataclass(frozen=True, slots=True)

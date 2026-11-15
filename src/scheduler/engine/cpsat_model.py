@@ -23,11 +23,10 @@ Objective: minimize ``sum(w_j * T_j)`` (or plain total tardiness when ``weighted
 from __future__ import annotations
 
 from dataclasses import dataclass
-from itertools import combinations
 
 from ortools.sat.python import cp_model
 
-from scheduler.engine.models import Job, ProblemInstance, Resource, duration_on
+from scheduler.engine.models import Job, ProblemInstance, Resource, duration_on, option_sets
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,19 +63,6 @@ def blocked_periods(resource: Resource, horizon: int) -> list[tuple[int, int]]:
     if cursor < horizon:
         blocked.append((cursor, horizon))
     return blocked
-
-
-def option_sets(job: Job, resources: dict[str, Resource]) -> list[tuple[Resource, ...]]:
-    """Resource sets a job may use: one per eligible resource, or every non-empty subset when
-    the job has ``work`` (so it may merge resources)."""
-    eligible = [resources[rid] for rid in job.eligible]
-    if job.work is None:
-        return [(resource,) for resource in eligible]
-    return [
-        subset
-        for size in range(1, len(eligible) + 1)
-        for subset in combinations(eligible, size)
-    ]
 
 
 def build_model(problem: ProblemInstance, *, weighted: bool = True) -> BuiltModel:

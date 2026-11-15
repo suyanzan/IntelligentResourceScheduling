@@ -1,6 +1,6 @@
 // Summary figures, utilization meters and the solver panel. All dynamic text uses textContent.
 
-import { availableUnits, fmtDuration, fmtNumber, fmtPercent, fmtWhen } from "./format.js";
+import { availableUnits, fmtDuration, fmtHours, fmtNumber, fmtPercent, fmtWhen } from "./format.js";
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -86,8 +86,10 @@ export function renderKpis(root, run, model) {
   root.replaceChildren();
   const m = run?.metrics;
   if (!m) return;
-  const late = run.assignments.filter((a) => a.tardiness > 0).length;
-  const total = run.assignments.length;
+  // A job that merges several lines has one assignment per line; count each job once.
+  const jobs = new Map(run.assignments.map((a) => [a.job_id, a.tardiness]));
+  const late = [...jobs.values()].filter((t) => t > 0).length;
+  const total = jobs.size;
 
   const hero = el("div", "hero");
   hero.append(
@@ -104,6 +106,7 @@ export function renderKpis(root, run, model) {
   root.append(
     hero,
     tile("Total tardiness", fmtDuration(m.total_tardiness, model.minutes), late ? `across ${late} late ${late === 1 ? "job" : "jobs"}` : "no late jobs"),
+    tile("Average delay", fmtHours(m.mean_delay ?? 0, model.minutes), "late hours \u00f7 all jobs"),
     tile("Weighted tardiness", fmtNumber(m.weighted_tardiness), "tardiness times priority"),
     tile("Last job ends", fmtDuration(m.makespan, model.minutes), model.horizonStart ? fmtWhen(model, m.makespan) : "from the start"),
   );
