@@ -90,6 +90,7 @@ class Resource(Base):
         CheckConstraint(
             "daily_capacity_units IS NULL OR daily_capacity_units >= 0", name="capacity_valid"
         ),
+        CheckConstraint("capacity >= 1", name="capacity_min"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -98,6 +99,8 @@ class Resource(Base):
     name: Mapped[str] = mapped_column(String(200))
     # Derived from the calendar: the most available units on any single day.
     daily_capacity_units: Mapped[int | None]
+    # Processing capacity per unit (e.g. CPUs); used by jobs that have ``work``.
+    capacity: Mapped[int] = mapped_column(default=1, server_default="1")
 
     scenario: Mapped[Scenario] = relationship(back_populates="resources")
     windows: Mapped[list[ResourceWindow]] = relationship(
@@ -128,7 +131,11 @@ class Job(Base):
     __tablename__ = "jobs"
     __table_args__ = (
         UniqueConstraint("scenario_id", "code", name="uq_jobs_scenario_code"),
-        CheckConstraint("duration_units > 0", name="duration_positive"),
+        CheckConstraint(
+            "duration_units >= 0 AND (work IS NOT NULL OR duration_units > 0)",
+            name="duration_valid",
+        ),
+        CheckConstraint("work IS NULL OR work > 0", name="work_positive"),
         CheckConstraint("priority BETWEEN 1 AND 5", name="priority_range"),
         CheckConstraint("release_unit >= 0", name="release_nonnegative"),
         CheckConstraint("due_unit >= 0", name="due_nonnegative"),
@@ -142,6 +149,9 @@ class Job(Base):
     due_unit: Mapped[int]
     priority: Mapped[int]
     release_unit: Mapped[int] = mapped_column(default=0)
+    # Capacity-hours (e.g. CPU-hours). When set, the job may merge resources and
+    # ``duration_units`` is 0 (the duration depends on the resources chosen).
+    work: Mapped[int | None]
 
     scenario: Mapped[Scenario] = relationship(back_populates="jobs")
     eligible_resources: Mapped[list[Resource]] = relationship(secondary=job_eligible_resources)
@@ -188,9 +198,11 @@ class ScheduleRun(Base):
 
 
 class Assignment(Base):
+    """One job on one resource. A job that merges several resources has one row per resource."""
+
     __tablename__ = "assignments"
     __table_args__ = (
-        UniqueConstraint("run_id", "job_id", name="uq_assignments_run_job"),
+        UniqueConstraint("run_id", "job_id", "resource_id", name="uq_assignments_run_job_resource"),
         CheckConstraint("start_unit >= 0 AND start_unit < end_unit", name="span_order"),
         CheckConstraint("tardiness_units >= 0", name="tardiness_nonnegative"),
     )
@@ -219,5 +231,7 @@ class RunMetrics(Base):
     weighted_tardiness: Mapped[int] = mapped_column(BigInteger)
     makespan: Mapped[int]
     utilization: Mapped[dict[str, float]] = mapped_column(JsonType)
+    # Sum of positive delays divided by the number of jobs.
+    mean_delay: Mapped[float] = mapped_column(Float, default=0.0, server_default="0")
 
     run: Mapped[ScheduleRun] = relationship(back_populates="metrics")

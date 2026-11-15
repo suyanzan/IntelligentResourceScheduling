@@ -24,6 +24,7 @@ from random import Random
 
 from scheduler.engine.models import Job, ProblemInstance, Resource, Window
 from scheduler.engine.validation import validate_instance
+from scheduler.synthetic.opc import OPC_PRESETS, generate_opc
 
 UNITS_PER_DAY = 24
 MAX_DURATION = 8  # the shortest shift is 8 units, so every job fits in a shift
@@ -60,11 +61,14 @@ PRESETS: dict[str, GeneratorConfig] = {
 
 
 def preset(name: str) -> ProblemInstance:
-    """Generate one of the named presets (``tiny``, ``small``, ``medium``)."""
+    """Generate one of the named presets (``tiny``, ``small``, ``medium``, ``opc``)."""
+    if name in OPC_PRESETS:
+        return generate_opc(OPC_PRESETS[name])
     try:
         config = PRESETS[name]
     except KeyError:
-        raise ValueError(f"unknown preset {name!r}; choose from {sorted(PRESETS)}") from None
+        choices = sorted([*PRESETS, *OPC_PRESETS])
+        raise ValueError(f"unknown preset {name!r}; choose from {choices}") from None
     return generate(config)
 
 

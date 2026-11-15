@@ -33,3 +33,14 @@ def test_larger_presets_yield_verified_schedules(name: str) -> None:
     metrics = compute_metrics(problem, result.assignments)
     assert 0.0 <= metrics.on_time_rate <= 1.0
     assert all(0.0 <= u <= 1.0 for u in metrics.utilization.values())
+
+
+def test_opc_preset_yields_a_verified_schedule_with_merged_lines() -> None:
+    problem = preset("opc")
+    result = solve(problem, SolveParams(time_limit_s=20.0))
+    assert result.status in (SolveStatus.OPTIMAL, SolveStatus.FEASIBLE)
+    assert verify_schedule(problem, result.assignments) == []
+    assert result.objective == objective_value(problem, result.assignments)
+    metrics = compute_metrics(problem, result.assignments)
+    assert metrics.job_count == len(problem.jobs)
+    assert metrics.mean_delay == pytest.approx(metrics.total_tardiness / len(problem.jobs))

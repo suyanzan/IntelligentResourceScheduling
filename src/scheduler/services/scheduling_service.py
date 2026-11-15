@@ -245,6 +245,7 @@ def solve_scenario(
             weighted_tardiness=metrics.weighted_tardiness,
             makespan=metrics.makespan,
             utilization=metrics.utilization,
+            mean_delay=metrics.mean_delay,
         )
 
     session.add(run)
@@ -303,6 +304,7 @@ def _populate(scenario: orm.Scenario, problem: em.ProblemInstance) -> None:
             code=resource.id,
             name=resource.name,
             daily_capacity_units=daily_capacity(resource.windows, units_per_day),
+            capacity=resource.capacity,
         )
         row.windows = [
             orm.ResourceWindow(start_unit=w.start, end_unit=w.end) for w in resource.windows
@@ -318,6 +320,7 @@ def _populate(scenario: orm.Scenario, problem: em.ProblemInstance) -> None:
             due_unit=job.due,
             priority=job.priority,
             release_unit=job.release,
+            work=job.work,
         )
         job_row.eligible_resources = [rows[resource_id] for resource_id in job.eligible]
         scenario.jobs.append(job_row)
@@ -329,6 +332,7 @@ def _to_instance(scenario: orm.Scenario) -> em.ProblemInstance:
             id=row.code,
             name=row.name,
             windows=tuple(em.Window(w.start_unit, w.end_unit) for w in row.windows),
+            capacity=row.capacity,
         )
         for row in scenario.resources
     )
@@ -341,6 +345,7 @@ def _to_instance(scenario: orm.Scenario) -> em.ProblemInstance:
             eligible=tuple(r.code for r in sorted(row.eligible_resources, key=lambda r: r.id)),
             priority=row.priority,
             release=row.release_unit,
+            work=row.work,
         )
         for row in scenario.jobs
     )

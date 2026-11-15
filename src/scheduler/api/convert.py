@@ -18,7 +18,9 @@ def to_problem(instance: schemas.InstanceIn) -> em.ProblemInstance:
     return em.ProblemInstance(
         horizon=instance.horizon,
         resources=tuple(
-            em.Resource(r.id, r.name, tuple(em.Window(w.start, w.end) for w in r.windows))
+            em.Resource(
+                r.id, r.name, tuple(em.Window(w.start, w.end) for w in r.windows), r.capacity
+            )
             for r in instance.resources
         ),
         jobs=tuple(
@@ -30,6 +32,7 @@ def to_problem(instance: schemas.InstanceIn) -> em.ProblemInstance:
                 eligible=tuple(j.eligible),
                 priority=j.priority,
                 release=j.release,
+                work=j.work,
             )
             for j in instance.jobs
         ),
@@ -78,6 +81,7 @@ def scenario_detail(scenario: orm.Scenario, *, run_count: int) -> schemas.Scenar
                 name=r.name,
                 windows=[schemas.WindowIn(start=w.start_unit, end=w.end_unit) for w in r.windows],
                 daily_capacity_units=r.daily_capacity_units,
+                capacity=r.capacity,
             )
             for r in scenario.resources
         ],
@@ -90,6 +94,7 @@ def scenario_detail(scenario: orm.Scenario, *, run_count: int) -> schemas.Scenar
                 eligible=[r.code for r in sorted(j.eligible_resources, key=lambda r: r.id)],
                 priority=j.priority,
                 release=j.release_unit,
+                work=j.work,
             )
             for j in scenario.jobs
         ],
@@ -107,6 +112,7 @@ def _metrics(run: orm.ScheduleRun) -> schemas.MetricsOut | None:
         weighted_tardiness=m.weighted_tardiness,
         makespan=m.makespan,
         utilization=dict(m.utilization),
+        mean_delay=m.mean_delay,
     )
 
 
@@ -150,6 +156,8 @@ def run_detail(run: orm.ScheduleRun) -> schemas.RunDetail:
             due=a.job.due_unit,
             priority=a.job.priority,
             tardiness=a.tardiness_units,
+            delay=a.end_unit - a.job.due_unit,
+            work=a.job.work,
             start_at=at(a.start_unit),
             end_at=at(a.end_unit),
         )

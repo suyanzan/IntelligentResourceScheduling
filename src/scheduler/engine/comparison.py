@@ -15,11 +15,20 @@ from scheduler.engine.models import Metrics
 
 Better = Literal["a", "b", "tie"]
 
-METRIC_KEYS = ("objective", "on_time_rate", "total_tardiness", "weighted_tardiness", "makespan")
+METRIC_KEYS = (
+    "objective",
+    "on_time_rate",
+    "total_tardiness",
+    "weighted_tardiness",
+    "mean_delay",
+    "makespan",
+)
 
 
 @dataclass(frozen=True, slots=True)
 class Placement:
+    """Where a job runs. A job that merges lines lists them joined with ``+`` (``"A+B"``)."""
+
     resource_id: str
     start: int
     end: int
@@ -92,6 +101,7 @@ def _metric_values(view: RunView) -> dict[str, float | None]:
         "on_time_rate": m.on_time_rate if m else None,
         "total_tardiness": m.total_tardiness if m else None,
         "weighted_tardiness": m.weighted_tardiness if m else None,
+        "mean_delay": m.mean_delay if m else None,
         "makespan": m.makespan if m else None,
     }
 

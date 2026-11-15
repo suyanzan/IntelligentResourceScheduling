@@ -10,6 +10,7 @@ from scheduler.api import convert, schemas
 from scheduler.api.deps import SessionDep
 from scheduler.services import scheduling_service as svc
 from scheduler.synthetic.generator import PRESETS, GeneratorConfig, generate
+from scheduler.synthetic.opc import OPC_PRESETS, generate_opc
 
 router = APIRouter(prefix="/api/data", tags=["synthetic data"])
 
@@ -21,8 +22,15 @@ SYNTHETIC_HORIZON_START = dt.date(2026, 1, 5)
 def generate_scenario(body: schemas.GenerateRequest, session: SessionDep) -> schemas.ScenarioDetail:
     """Create a scenario from fully fictional, seeded data (same request, same data)."""
     label: str
-    if body.preset is not None:
+    if body.preset in OPC_PRESETS:
+        opc_config = OPC_PRESETS[body.preset]
+        problem = generate_opc(opc_config)
+        seed = opc_config.seed
+        label = body.preset
+    elif body.preset is not None:
         config = PRESETS[body.preset]
+        problem = generate(config)
+        seed = config.seed
         label = body.preset
     else:
         defaults = GeneratorConfig()
@@ -32,16 +40,18 @@ def generate_scenario(body: schemas.GenerateRequest, session: SessionDep) -> sch
             num_jobs=body.num_jobs or defaults.num_jobs,
             num_days=body.num_days or defaults.num_days,
         )
+        problem = generate(config)
+        seed = config.seed
         label = "custom"
 
     scenario = svc.save_instance(
         session,
-        generate(config),
-        name=body.name or f"Synthetic {label} (seed {config.seed})",
+        problem,
+        name=body.name or f"Synthetic {label} (seed {seed})",
         description="Fully fictional synthetic data.",
         horizon_start=SYNTHETIC_HORIZON_START,
         time_unit_minutes=60,
-        seed=config.seed,
+        seed=seed,
     )
     session.commit()
     full = svc.get_scenario(session, scenario.id)

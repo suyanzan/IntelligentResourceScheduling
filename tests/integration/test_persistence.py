@@ -118,3 +118,10 @@ def test_delete_cascades_to_every_table(session: Session) -> None:
 
 def test_locked_scenario_message(session: Session) -> None:
     assert "clone it" in str(ScenarioLockedError(1))
+
+
+def test_work_jobs_and_line_capacity_round_trip(session: Session) -> None:
+    problem = preset("opc")
+    scenario = svc.save_instance(session, problem, name="opc")
+    session.expire_all()
+    assert svc.load_instance(session, scenario.id) == problem
