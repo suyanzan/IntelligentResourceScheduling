@@ -58,14 +58,20 @@ def solve(problem: ProblemInstance, params: SolveParams | None = None) -> SolveR
         return SolveResult(status=SolveStatus.MODEL_INVALID, messages=tuple(issues))
 
     built = build_model(problem, weighted=params.weighted, no_idle=params.no_idle)
-    _add_start_hint(problem, built, params)
+    start = best_start_schedule(problem, weighted=params.weighted, no_idle=params.no_idle)
+    if start is not None:
+        _add_start_hint(built, start)
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = params.time_limit_s
     solver.parameters.num_workers = params.num_workers
     solver.parameters.random_seed = params.random_seed
+    solver.parameters.repair_hint = True  # complete the hint's helper variables if needed
 
     status = map_status(solver.solve(built.model))
     wall = solver.wall_time
+
+    if status is SolveStatus.UNKNOWN and start is not None:
+        return _start_result(problem, start, params, wall, "the solver found no schedule")
 
     if status in (SolveStatus.INFEASIBLE, SolveStatus.UNKNOWN, SolveStatus.MODEL_INVALID):
         return SolveResult(status=status, wall_time_s=wall, messages=(_describe(status),))
@@ -73,6 +79,13 @@ def solve(problem: ProblemInstance, params: SolveParams | None = None) -> SolveR
     assignments = _extract(problem, built, solver)
     objective = round(solver.objective_value)
     _check(problem, assignments, objective, params.weighted, params.no_idle)
+
+    if (
+        status is SolveStatus.FEASIBLE
+        and start is not None
+        and objective_value(problem, start, weighted=params.weighted) < objective
+    ):
+        return _start_result(problem, start, params, wall, "the solver's schedule was worse")
 
     bound = solver.best_objective_bound
     return SolveResult(
@@ -85,12 +98,31 @@ def solve(problem: ProblemInstance, params: SolveParams | None = None) -> SolveR
     )
 
 
-def _add_start_hint(problem: ProblemInstance, built: BuiltModel, params: SolveParams) -> None:
-    """Give the solver a valid starting schedule when a cheap heuristic applies. A hint never
-    changes what is feasible or optimal; it only lets the search start from a good solution."""
-    schedule = best_start_schedule(problem, weighted=params.weighted, no_idle=params.no_idle)
-    if schedule is None:
-        return
+def _start_result(
+    problem: ProblemInstance,
+    schedule: tuple[Assignment, ...],
+    params: SolveParams,
+    wall: float,
+    reason: str,
+) -> SolveResult:
+    """Return the verified start schedule as ``FEASIBLE`` (never ``OPTIMAL``, no bound known)."""
+    objective = objective_value(problem, schedule, weighted=params.weighted)
+    _check(problem, schedule, objective, params.weighted, params.no_idle)
+    return SolveResult(
+        status=SolveStatus.FEASIBLE,
+        assignments=schedule,
+        objective=objective,
+        wall_time_s=wall,
+        messages=(
+            f"{reason} within the time limit; this is the verified start schedule from a "
+            "simple dispatch rule. A longer time limit may find a better one.",
+        ),
+    )
+
+
+def _add_start_hint(built: BuiltModel, schedule: tuple[Assignment, ...]) -> None:
+    """Give the solver a valid starting schedule. A hint never changes what is feasible or
+    optimal; it only lets the search start from a good solution."""
     used: dict[str, set[str]] = {}
     starts: dict[str, int] = {}
     for a in schedule:

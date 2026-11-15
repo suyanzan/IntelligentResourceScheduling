@@ -72,3 +72,13 @@ def test_diffusion_job_jumps_the_queue_on_a_free_line() -> None:
     assert {a.resource_id for a in result.assignments} == {"D"}
     assert compute_metrics(problem, result.assignments).cycle_points == 0
     assert result.objective == 0
+
+
+def test_a_tiny_time_limit_still_returns_a_verified_feasible_schedule() -> None:
+    from scheduler.synthetic.generator import preset
+
+    problem = preset("opc_live")
+    result = solve(problem, SolveParams(time_limit_s=0.05, no_idle=True))
+    assert result.status in (SolveStatus.FEASIBLE, SolveStatus.OPTIMAL)
+    assert result.assignments
+    assert verify_schedule(problem, result.assignments, no_idle=True) == []
