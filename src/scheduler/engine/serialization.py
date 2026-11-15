@@ -21,6 +21,7 @@ def instance_to_dict(problem: ProblemInstance) -> dict[str, Any]:
                 "id": r.id,
                 "name": r.name,
                 "windows": [[w.start, w.end] for w in r.windows],
+                **({"capacity": r.capacity} if r.capacity != 1 else {}),
             }
             for r in problem.resources
         ],
@@ -33,6 +34,7 @@ def instance_to_dict(problem: ProblemInstance) -> dict[str, Any]:
                 "eligible": list(j.eligible),
                 "priority": j.priority,
                 "release": j.release,
+                **({"work": j.work} if j.work is not None else {}),
             }
             for j in problem.jobs
         ],
@@ -45,6 +47,7 @@ def instance_from_dict(data: dict[str, Any]) -> ProblemInstance:
             id=r["id"],
             name=r["name"],
             windows=tuple(Window(start, end) for start, end in r["windows"]),
+            capacity=r.get("capacity", 1),
         )
         for r in data["resources"]
     )
@@ -57,6 +60,7 @@ def instance_from_dict(data: dict[str, Any]) -> ProblemInstance:
             eligible=tuple(j["eligible"]),
             priority=j["priority"],
             release=j["release"],
+            work=j.get("work"),
         )
         for j in data["jobs"]
     )

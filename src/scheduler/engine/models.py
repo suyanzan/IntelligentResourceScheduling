@@ -4,9 +4,13 @@ Conventions:
 
 * Time is discrete: every time value is an integer number of time units counted from 0.
 * Windows are half-open intervals ``[start, end)``.
-* A job is non-preemptive, uses exactly one resource and has a fixed duration.
+* A job is non-preemptive. A classic job uses exactly one resource for a fixed ``duration``.
+* A job with ``work`` (capacity-hours, e.g. CPU-hours) may use several of its eligible resources
+  at once ("merging"): all chosen resources start and end together, each handles only that job
+  while it runs, and the duration is ``ceil(work / total capacity of the chosen resources)``.
 * ``priority`` is 1..5 (higher means more important) and doubles as the tardiness weight.
-* Tardiness of a job is ``max(0, end - due)``; a job is on time when its tardiness is 0.
+* Delay of a job is ``end - due`` (negative when early); tardiness is ``max(0, delay)`` and a job
+  is on time when its tardiness is 0.
 
 The models are plain, permissive dataclasses: structural problems (bad durations, overlapping
 windows, ...) are reported by :mod:`scheduler.engine.validation` rather than raised here, so
@@ -18,6 +22,7 @@ SQLAlchemy and Pydantic.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 
@@ -51,6 +56,7 @@ class Resource:
     id: str
     name: str
     windows: tuple[Window, ...]
+    capacity: int = 1  # processing capacity per time unit (e.g. CPUs); used by jobs with work
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,6 +70,19 @@ class Job:
     eligible: tuple[str, ...]
     priority: int = 1
     release: int = 0
+    work: int | None = None  # capacity-hours; when set, ``duration`` is ignored
+
+
+def duration_on(job: Job, resources: Sequence[Resource]) -> int:
+    """Duration of ``job`` when it runs on all of ``resources`` together.
+
+    Classic jobs return their fixed duration. Jobs with ``work`` return
+    ``ceil(work / total capacity)``.
+    """
+    if job.work is None:
+        return job.duration
+    total = sum(resource.capacity for resource in resources)
+    return -(-job.work // total)
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,7 +102,11 @@ class ProblemInstance:
 
 @dataclass(frozen=True, slots=True)
 class Assignment:
-    """A job placed on a resource during ``[start, end)``."""
+    """A job placed on a resource during ``[start, end)``.
+
+    A job that merges several resources has one assignment per resource, all with the same
+    start and end.
+    """
 
     job_id: str
     resource_id: str
@@ -125,3 +148,4 @@ class Metrics:
     weighted_tardiness: int
     makespan: int
     utilization: dict[str, float]
+    mean_delay: float = 0.0  # sum of positive delays / number of jobs (early jobs count as 0)

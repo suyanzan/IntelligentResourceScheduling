@@ -91,7 +91,7 @@ def test_missing_job(problem: ProblemInstance, valid_assignments: list[Assignmen
 
 def test_job_assigned_twice(problem: ProblemInstance, valid_assignments: list[Assignment]) -> None:
     violations = verify_schedule(problem, [*valid_assignments, Assignment("J1", "R2", 10, 14)])
-    assert _has(violations, "J1", "more than once")
+    assert _has(violations, "J1", "cannot merge")
 
 
 def test_unknown_job_and_resource(

@@ -2,14 +2,20 @@
 
 Formulation (all times are integer units, windows are half-open):
 
-* ``x[j, r]``  boolean, job ``j`` runs on resource ``r`` (only for eligible ``r``).
-* ``s_j``      start of job ``j``, in ``[release_j, horizon - p_j]``.
-* ``I[j, r]``  optional interval ``[s_j, s_j + p_j)`` present iff ``x[j, r]``.
-* ``T_j``      tardiness, ``T_j >= s_j + p_j - due_j`` and ``T_j >= 0``.
+* ``x[j, o]``  boolean, job ``j`` uses option ``o``. An option is a set of eligible resources
+  that run the job together (a classic job has one single-resource option per eligible
+  resource; a job with ``work`` has one option per non-empty subset of its eligible resources)
+  and a duration ``p_{j,o}`` (fixed, or ``ceil(work / total capacity)``).
+* ``s_j``      start of job ``j``, in ``[release_j, horizon)``.
+* ``e_j``      end of job ``j``; ``e_j = s_j + p_{j,o}`` when option ``o`` is chosen.
+* ``I[j,o,r]`` optional interval ``[s_j, s_j + p_{j,o})`` on resource ``r`` of option ``o``,
+  present iff ``x[j, o]``.
+* ``T_j``      tardiness, ``T_j >= e_j - due_j`` and ``T_j >= 0``.
 
-Constraints: each job on exactly one eligible resource; per resource a ``NoOverlap`` over its
-optional intervals plus one fixed interval for every closed (unavailable) period. Because a job
-is a single non-preemptive interval, it must then lie entirely inside one availability window.
+Constraints: each job picks exactly one option; per resource a ``NoOverlap`` over its optional
+intervals plus one fixed interval for every closed (unavailable) period. Because a job is a
+single non-preemptive interval on each chosen resource, it must then lie entirely inside one
+availability window of each of them.
 
 Objective: minimize ``sum(w_j * T_j)`` (or plain total tardiness when ``weighted`` is false).
 """
@@ -17,10 +23,20 @@ Objective: minimize ``sum(w_j * T_j)`` (or plain total tardiness when ``weighted
 from __future__ import annotations
 
 from dataclasses import dataclass
+from itertools import combinations
 
 from ortools.sat.python import cp_model
 
-from scheduler.engine.models import Job, ProblemInstance, Resource
+from scheduler.engine.models import Job, ProblemInstance, Resource, duration_on
+
+
+@dataclass(frozen=True, slots=True)
+class Option:
+    """One way to run a job: a set of resources used together and the resulting duration."""
+
+    resource_ids: tuple[str, ...]
+    duration: int
+    literal: cp_model.IntVar
 
 
 @dataclass(slots=True)
@@ -29,7 +45,7 @@ class BuiltModel:
 
     model: cp_model.CpModel
     starts: dict[str, cp_model.IntVar]
-    presence: dict[tuple[str, str], cp_model.IntVar]
+    options: dict[str, list[Option]]
 
 
 def blocked_periods(resource: Resource, horizon: int) -> list[tuple[int, int]]:
@@ -50,21 +66,37 @@ def blocked_periods(resource: Resource, horizon: int) -> list[tuple[int, int]]:
     return blocked
 
 
+def option_sets(job: Job, resources: dict[str, Resource]) -> list[tuple[Resource, ...]]:
+    """Resource sets a job may use: one per eligible resource, or every non-empty subset when
+    the job has ``work`` (so it may merge resources)."""
+    eligible = [resources[rid] for rid in job.eligible]
+    if job.work is None:
+        return [(resource,) for resource in eligible]
+    return [
+        subset
+        for size in range(1, len(eligible) + 1)
+        for subset in combinations(eligible, size)
+    ]
+
+
 def build_model(problem: ProblemInstance, *, weighted: bool = True) -> BuiltModel:
     """Build the CP-SAT model for a validated problem instance."""
     model = cp_model.CpModel()
     horizon = problem.horizon
+    resources = problem.resource_by_id()
 
     starts: dict[str, cp_model.IntVar] = {}
-    presence: dict[tuple[str, str], cp_model.IntVar] = {}
+    options: dict[str, list[Option]] = {}
     intervals_by_resource: dict[str, list[cp_model.IntervalVar]] = {
         r.id: [] for r in problem.resources
     }
     tardiness_terms: list[cp_model.LinearExpr] = []
 
     for job in problem.jobs:
-        _add_job(model, job, horizon, weighted, starts, presence, intervals_by_resource,
-                 tardiness_terms)
+        _add_job(
+            model, job, resources, horizon, weighted, starts, options,
+            intervals_by_resource, tardiness_terms,
+        )
 
     for resource in problem.resources:
         fixed = [
@@ -74,33 +106,42 @@ def build_model(problem: ProblemInstance, *, weighted: bool = True) -> BuiltMode
         model.add_no_overlap([*intervals_by_resource[resource.id], *fixed])
 
     model.minimize(sum(tardiness_terms))
-    return BuiltModel(model=model, starts=starts, presence=presence)
+    return BuiltModel(model=model, starts=starts, options=options)
 
 
 def _add_job(
     model: cp_model.CpModel,
     job: Job,
+    resources: dict[str, Resource],
     horizon: int,
     weighted: bool,
     starts: dict[str, cp_model.IntVar],
-    presence: dict[tuple[str, str], cp_model.IntVar],
+    options: dict[str, list[Option]],
     intervals_by_resource: dict[str, list[cp_model.IntervalVar]],
     tardiness_terms: list[cp_model.LinearExpr],
 ) -> None:
-    start = model.new_int_var(job.release, horizon - job.duration, f"start_{job.id}")
+    start = model.new_int_var(job.release, horizon, f"start_{job.id}")
+    end = model.new_int_var(job.release, horizon, f"end_{job.id}")
     starts[job.id] = start
 
-    literals: list[cp_model.IntVar] = []
-    for resource_id in job.eligible:
-        literal = model.new_bool_var(f"on_{job.id}_{resource_id}")
-        presence[(job.id, resource_id)] = literal
-        literals.append(literal)
-        interval = model.new_optional_interval_var(
-            start, job.duration, start + job.duration, literal, f"iv_{job.id}_{resource_id}"
-        )
-        intervals_by_resource[resource_id].append(interval)
-    model.add_exactly_one(literals)
+    chosen: list[Option] = []
+    for subset in option_sets(job, resources):
+        duration = duration_on(job, subset)
+        if job.release + duration > horizon:
+            continue  # this combination can never finish inside the horizon
+        ids = tuple(resource.id for resource in subset)
+        label = f"{job.id}_{'+'.join(ids)}"
+        literal = model.new_bool_var(f"use_{label}")
+        chosen.append(Option(ids, duration, literal))
+        model.add(end == start + duration).only_enforce_if(literal)
+        for rid in ids:
+            interval = model.new_optional_interval_var(
+                start, duration, start + duration, literal, f"iv_{label}_{rid}"
+            )
+            intervals_by_resource[rid].append(interval)
+    options[job.id] = chosen
+    model.add_exactly_one([option.literal for option in chosen])
 
     late = model.new_int_var(0, horizon, f"late_{job.id}")
-    model.add(late >= start + job.duration - job.due)
+    model.add(late >= end - job.due)
     tardiness_terms.append((job.priority if weighted else 1) * late)

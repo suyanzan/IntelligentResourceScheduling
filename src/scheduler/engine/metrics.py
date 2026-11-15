@@ -17,14 +17,35 @@ from scheduler.engine.models import (
     Metrics,
     ProblemInstance,
     Window,
+    duration_on,
 )
 
 UtilizationBasis = Literal["makespan", "horizon"]
 
 
+def delay(job: Job, end: int) -> int:
+    """Signed delay of a job finishing at ``end``: ``end - due`` (negative when early)."""
+    return end - job.due
+
+
 def tardiness(job: Job, end: int) -> int:
     """Tardiness of a job finishing at ``end``: ``max(0, end - due)``."""
-    return max(0, end - job.due)
+    return max(0, delay(job, end))
+
+
+def job_ends(assignments: Sequence[Assignment]) -> dict[str, int]:
+    """End time per job. A job that merges several resources has several assignments that share
+    one end time, so each job is counted once."""
+    return {a.job_id: a.end for a in assignments}
+
+
+def job_delays(problem: ProblemInstance, assignments: Sequence[Assignment]) -> dict[str, int]:
+    """Signed delay (``end - due``) for every assigned job."""
+    jobs = problem.job_by_id()
+    return {
+        job_id: delay(_lookup_job(jobs, job_id), end)
+        for job_id, end in job_ends(assignments).items()
+    }
 
 
 def objective_value(
@@ -36,9 +57,9 @@ def objective_value(
     """Total (optionally priority-weighted) tardiness of a schedule."""
     jobs = problem.job_by_id()
     total = 0
-    for assignment in assignments:
-        job = _lookup_job(jobs, assignment.job_id)
-        late = tardiness(job, assignment.end)
+    for job_id, end in job_ends(assignments).items():
+        job = _lookup_job(jobs, job_id)
+        late = tardiness(job, end)
         total += late * job.priority if weighted else late
     return total
 
@@ -83,13 +104,15 @@ def compute_metrics(
     makespan = 0
     busy: dict[str, int] = defaultdict(int)
 
-    for assignment in assignments:
-        job = _lookup_job(jobs, assignment.job_id)
-        late = tardiness(job, assignment.end)
+    ends = job_ends(assignments)
+    for job_id, end in ends.items():
+        job = _lookup_job(jobs, job_id)
+        late = tardiness(job, end)
         total_late += late
         weighted_late += late * job.priority
         if late == 0:
             on_time += 1
+    for assignment in assignments:
         makespan = max(makespan, assignment.end)
         busy[assignment.resource_id] += assignment.end - assignment.start
 
@@ -99,7 +122,7 @@ def compute_metrics(
         available = available_units(resource.windows, upto)
         utilization[resource.id] = busy[resource.id] / available if available > 0 else 0.0
 
-    job_count = len(assignments)
+    job_count = len(ends)
     return Metrics(
         job_count=job_count,
         on_time_count=on_time,
@@ -108,64 +131,47 @@ def compute_metrics(
         weighted_tardiness=weighted_late,
         makespan=makespan,
         utilization=utilization,
+        mean_delay=total_late / job_count if job_count else 0.0,
     )
 
 
 def verify_schedule(problem: ProblemInstance, assignments: Sequence[Assignment]) -> list[str]:
     """Check a schedule against the problem; an empty list means it is valid.
 
-    Checks: every job assigned exactly once, known job and resource, eligibility, duration,
-    release time, horizon, containment in a single availability window, and no overlap on a
-    resource.
+    Checks: every job placed, known job and resources, eligibility, one shared start and end for
+    all resources of a job, the right duration (fixed, or ``ceil(work / total capacity)``),
+    release time, horizon, containment in a single availability window of every used resource,
+    and no overlap on a resource.
     """
     violations: list[str] = []
     jobs = problem.job_by_id()
     resources = problem.resource_by_id()
 
-    seen: dict[str, int] = defaultdict(int)
+    rows: dict[str, list[Assignment]] = defaultdict(list)
     for a in assignments:
-        seen[a.job_id] += 1
-    for job_id, count in seen.items():
+        rows[a.job_id].append(a)
+    for job_id in rows:
         if job_id not in jobs:
             violations.append(f"assignment refers to unknown job {job_id!r}")
-        elif count > 1:
-            violations.append(f"job {job_id!r} is assigned more than once")
     for job_id in jobs:
-        if job_id not in seen:
+        if job_id not in rows:
             violations.append(f"job {job_id!r} has no assignment")
 
     by_resource: dict[str, list[Assignment]] = defaultdict(list)
-    for a in assignments:
-        resource = resources.get(a.resource_id)
-        if resource is None:
-            violations.append(f"job {a.job_id!r} uses unknown resource {a.resource_id!r}")
-            continue
-        by_resource[a.resource_id].append(a)
-
-        job = jobs.get(a.job_id)
+    for job_id, items in rows.items():
+        job = jobs.get(job_id)
+        used: list[str] = []
+        for a in items:
+            if a.resource_id in used:
+                violations.append(f"job {job_id!r} uses resource {a.resource_id!r} more than once")
+            used.append(a.resource_id)
+            if a.resource_id not in resources:
+                violations.append(f"job {job_id!r} uses unknown resource {a.resource_id!r}")
+                continue
+            by_resource[a.resource_id].append(a)
         if job is None:
             continue
-        if a.resource_id not in job.eligible:
-            violations.append(f"job {a.job_id!r} is not eligible for resource {a.resource_id!r}")
-        if a.end - a.start != job.duration:
-            violations.append(
-                f"job {a.job_id!r} spans {a.end - a.start} units but its duration is "
-                f"{job.duration}"
-            )
-        if a.start < job.release:
-            violations.append(
-                f"job {a.job_id!r} starts at {a.start}, before its release time {job.release}"
-            )
-        if a.start < 0 or a.end > problem.horizon:
-            violations.append(
-                f"job {a.job_id!r} [{a.start}, {a.end}) is beyond the horizon "
-                f"[0, {problem.horizon})"
-            )
-        if not any(w.start <= a.start and a.end <= w.end for w in resource.windows):
-            violations.append(
-                f"job {a.job_id!r} [{a.start}, {a.end}) is not inside a single availability "
-                f"window of resource {a.resource_id!r}"
-            )
+        violations.extend(_verify_job(problem, job, items))
 
     for resource_id, items in by_resource.items():
         ordered = sorted(items, key=lambda x: (x.start, x.end))
@@ -175,6 +181,48 @@ def verify_schedule(problem: ProblemInstance, assignments: Sequence[Assignment])
                     f"jobs {prev.job_id!r} and {cur.job_id!r} overlap on resource {resource_id!r}"
                 )
 
+    return violations
+
+
+def _verify_job(problem: ProblemInstance, job: Job, items: list[Assignment]) -> list[str]:
+    violations: list[str] = []
+    resources = problem.resource_by_id()
+    first = items[0]
+
+    if any((a.start, a.end) != (first.start, first.end) for a in items):
+        violations.append(f"job {job.id!r} resources do not share one start and end")
+    if job.work is None and len(items) > 1:
+        violations.append(f"job {job.id!r} has a fixed duration and cannot merge resources")
+
+    used = [resources[a.resource_id] for a in items if a.resource_id in resources]
+    for a in items:
+        if a.resource_id not in job.eligible:
+            violations.append(f"job {job.id!r} is not eligible for resource {a.resource_id!r}")
+
+    expected = duration_on(job, used) if used else None
+    if expected is not None and first.end - first.start != expected:
+        violations.append(
+            f"job {job.id!r} spans {first.end - first.start} units but its duration is "
+            f"{expected}"
+        )
+    if first.start < job.release:
+        violations.append(
+            f"job {job.id!r} starts at {first.start}, before its release time {job.release}"
+        )
+    if first.start < 0 or first.end > problem.horizon:
+        violations.append(
+            f"job {job.id!r} [{first.start}, {first.end}) is beyond the horizon "
+            f"[0, {problem.horizon})"
+        )
+    for a in items:
+        resource = resources.get(a.resource_id)
+        if resource is not None and not any(
+            w.start <= a.start and a.end <= w.end for w in resource.windows
+        ):
+            violations.append(
+                f"job {job.id!r} [{a.start}, {a.end}) is not inside a single availability "
+                f"window of resource {a.resource_id!r}"
+            )
     return violations
 
 

@@ -86,10 +86,11 @@ def _extract(
     assignments: list[Assignment] = []
     for job in problem.jobs:
         start = solver.value(built.starts[job.id])
-        chosen = [
-            rid for rid in job.eligible if solver.boolean_value(built.presence[(job.id, rid)])
-        ]
-        assignments.append(Assignment(job.id, chosen[0], start, start + job.duration))
+        chosen = [o for o in built.options[job.id] if solver.boolean_value(o.literal)]
+        option = chosen[0]
+        assignments.extend(
+            Assignment(job.id, rid, start, start + option.duration) for rid in option.resource_ids
+        )
     return tuple(assignments)
 
 

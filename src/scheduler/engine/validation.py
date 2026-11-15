@@ -9,10 +9,11 @@ from __future__ import annotations
 
 from collections import Counter
 
-from scheduler.engine.models import Job, ProblemInstance, Resource
+from scheduler.engine.models import Job, ProblemInstance, Resource, duration_on
 
 MIN_PRIORITY = 1
 MAX_PRIORITY = 5
+MAX_MERGE_CHOICES = 8  # eligible resources per job with work (2**n - 1 options)
 
 
 def validate_instance(problem: ProblemInstance) -> list[str]:
@@ -27,6 +28,8 @@ def validate_instance(problem: ProblemInstance) -> list[str]:
 
     for resource in problem.resources:
         issues.extend(_validate_windows(resource, problem.horizon))
+        if resource.capacity < 1:
+            issues.append(f"resource {resource.id!r} capacity must be at least 1")
 
     known_resources = {r.id: r for r in problem.resources}
     for job in problem.jobs:
@@ -65,8 +68,16 @@ def _validate_job(job: Job, horizon: int, resources: dict[str, Resource]) -> lis
     issues: list[str] = []
     label = f"job {job.id!r}"
 
-    if job.duration <= 0:
-        issues.append(f"{label} duration must be positive, got {job.duration}")
+    if job.work is None:
+        if job.duration <= 0:
+            issues.append(f"{label} duration must be positive, got {job.duration}")
+    elif job.work <= 0:
+        issues.append(f"{label} work must be positive, got {job.work}")
+    elif len(job.eligible) > MAX_MERGE_CHOICES:
+        issues.append(
+            f"{label} has {len(job.eligible)} eligible resources; at most "
+            f"{MAX_MERGE_CHOICES} are supported when a job has work"
+        )
     if not MIN_PRIORITY <= job.priority <= MAX_PRIORITY:
         issues.append(
             f"{label} priority must be between {MIN_PRIORITY} and {MAX_PRIORITY}, "
@@ -86,6 +97,16 @@ def _validate_job(job: Job, horizon: int, resources: dict[str, Resource]) -> lis
         issues.append(f"{label} lists unknown resource {rid!r}")
 
     known = [resources[rid] for rid in job.eligible if rid in resources]
+    if job.work is not None:
+        if known and all(r.capacity >= 1 for r in known):
+            shortest = duration_on(job, known)
+            if job.release + shortest > horizon:
+                issues.append(
+                    f"{label} needs at least {shortest} units even on all its eligible "
+                    f"resources together, which does not fit after its release time "
+                    f"{job.release} within the horizon"
+                )
+        return issues
     if known and job.duration > 0 and job.release >= 0 and not _fits_somewhere(job, known, horizon):
         issues.append(
             f"{label} (duration {job.duration}, release {job.release}) cannot fit in any "
