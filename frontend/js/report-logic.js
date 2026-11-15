@@ -11,6 +11,36 @@ export function classify(job, nowMs) {
   return nowMs > job.dueMs ? "overdue" : "open";
 }
 
+/** Not done and its planned finish has passed (by more than the grace), though not yet past due. */
+export function isBehind(job, nowMs) {
+  return job.status !== "done" && nowMs <= job.dueMs && nowMs > job.plannedEndMs + 15 * 60_000;
+}
+
+/**
+ * One dial per due day: every order is a segment, in planned-finish order.
+ * `kind` is "done-ontime", "done-late", "todo-overdue", "todo-behind" or "todo-open".
+ */
+export function dayDials(jobs, nowMs, offsetMinutes) {
+  const days = new Map();
+  for (const job of jobs) {
+    const day = plantDay(job.dueMs - 1, offsetMinutes);
+    if (!days.has(day)) days.set(day, []);
+    days.get(day).push(job);
+  }
+  const kindOf = (job) => {
+    const c = classify(job, nowMs);
+    if (c === "ontime") return "done-ontime";
+    if (c === "late") return "done-late";
+    if (c === "overdue") return "todo-overdue";
+    return isBehind(job, nowMs) ? "todo-behind" : "todo-open";
+  };
+  return [...days.keys()].sort().map((day) => {
+    const items = days.get(day).sort((a, b) => a.plannedEndMs - b.plannedEndMs || a.id.localeCompare(b.id)).map((j) => ({ id: j.id, name: j.name, kind: kindOf(j) }));
+    const done = items.filter((i) => i.kind.startsWith("done")).length;
+    return { day, items, done, total: items.length };
+  });
+}
+
 export const CLASSES = ["ontime", "late", "overdue", "open"];
 
 function counts(jobs, nowMs) {
@@ -37,6 +67,7 @@ export function kpis(jobs, nowMs) {
     doneRate: total ? done / total : 0,
     meanDelayHours: total ? jobs.reduce((sum, j) => sum + delayHours(j, nowMs), 0) / total : 0,
     late: c.late + c.overdue,
+    behind: jobs.filter((j) => isBehind(j, nowMs)).length,
   };
 }
 

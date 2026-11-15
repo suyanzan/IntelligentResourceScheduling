@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { prepareJobs } from "../js/floor-logic.js";
-import { classify, curves, delayHours, kpis, perDay, utilization, worstDelays } from "../js/report-logic.js";
+import { classify, curves, dayDials, delayHours, isBehind, kpis, perDay, utilization, worstDelays } from "../js/report-logic.js";
 
 const OFFSET = 480;
 const t = (s) => Date.parse(s);
@@ -59,4 +59,18 @@ test("utilization sums planned and actual hours per line", () => {
 
 test("worst delays are ranked", () => {
   assert.deepEqual(worstDelays(jobs, NOW).map((d) => d.id), ["c", "b"]);
+});
+
+test("behind means past the planned finish but not yet past due", () => {
+  assert.equal(isBehind(jobs[3], NOW), true); // plan ended hours ago, due is two days away
+  assert.equal(isBehind(jobs[2], NOW), false); // already past due: overdue, not "behind"
+  assert.equal(isBehind(jobs[0], NOW), false); // finished
+  assert.equal(kpis(jobs, NOW).behind, 1);
+});
+
+test("dials give one segment per order with a kind", () => {
+  const dials = dayDials(jobs, NOW, OFFSET);
+  assert.equal(dials[0].total, 3);
+  assert.equal(dials[0].done, 2);
+  assert.deepEqual(dials[0].items.map((i) => i.kind).sort(), ["done-late", "done-ontime", "todo-overdue"]);
 });

@@ -1,48 +1,94 @@
-/* Management report: charts first, almost no text. */
-body.report { --c-ontime: var(--good); --c-late: var(--warning); --c-overdue: var(--critical); --c-open: var(--blue); --c-plan: var(--ink-3); }
+/* Management report. One dark hero with a dial per day; everything below it stays quiet. */
+body.report {
+  --mist: #edf1f0;
+  --ink-deep: #0d1a23;
+  --ink-teal: #12303a;
+  --ok: #2bb673;
+  --warn: #e7b416;
+  --bad: #e5533f;
+  --steel: #8fa3af;
+  --plan: #9aabb5;
+  background: var(--mist);
+}
+:root[data-theme="dark"] body.report { --mist: #0f1517; }
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) body.report { --mist: #0f1517; }
+}
 .report .muted { color: var(--ink-3); font-size: 13px; }
 .report .button-link { font-size: 13px; color: var(--ink); text-decoration: none; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; }
 .report .button-link.primary { background: var(--blue); border-color: var(--blue); color: var(--on-blue); font-weight: 600; }
-.legend-inline { display: flex; gap: 14px; list-style: none; margin: 0; padding: 0; font-size: 13px; color: var(--ink-2); }
-.sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
-.sw.ontime { background: var(--c-ontime); } .sw.late { background: var(--c-late); }
-.sw.overdue { background: var(--c-overdue); } .sw.open { background: var(--c-open); opacity: 0.55; }
 
-#report-main { max-width: 1280px; margin: 0 auto; padding: 18px 24px 40px; }
-#board { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-.kpis-row { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
-.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px 8px; min-width: 0; }
-.card.wide { grid-column: 1 / -1; }
-.card h2 { margin: 0 0 6px; font-size: 13px; font-weight: 600; color: var(--ink-2); letter-spacing: 0.02em; text-transform: uppercase; }
-.kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; display: flex; align-items: center; gap: 14px; }
-.kpi svg { flex: none; }
-.kpi .num { font-size: 34px; font-weight: 600; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
-.kpi .cap { font-size: 12px; color: var(--ink-3); margin-top: 4px; }
-.kpi[data-tone="bad"] .num { color: var(--critical); }
-.kpi[data-tone="ok"] .num { color: var(--good); }
+#report-main { max-width: 1240px; margin: 0 auto; padding: 20px 24px 48px; }
+#board { display: grid; gap: 28px; }
+
+/* Hero: three dials, one per day, every order a segment */
+#hero {
+  position: relative; overflow: hidden; color: #eaf3f1; border-radius: 22px; padding: 30px 34px 22px;
+  background:
+    repeating-radial-gradient(circle at 92% 8%, rgba(255,255,255,0.045) 0 1px, transparent 1px 26px),
+    linear-gradient(135deg, var(--ink-deep), var(--ink-teal));
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 44px; align-items: center;
+}
+#dials { display: flex; flex-wrap: wrap; gap: 18px 34px; justify-content: space-around; }
+.dial { text-align: center; }
+.dial svg { display: block; width: 196px; height: 196px; }
+.dial .day { font-size: 15px; margin-top: 2px; color: #b7cbd0; }
+.dial .big { font-size: 34px; font-weight: 250; letter-spacing: -0.03em; fill: #f4fbf9; font-variant-numeric: tabular-nums; }
+.dial .small { font-size: 11.5px; fill: #8fb0b6; }
+#stats { display: grid; gap: 16px; min-width: 200px; }
+.stat { display: flex; align-items: center; gap: 14px; }
+.stat svg { width: 26px; height: 26px; flex: none; }
+.stat .n { font-size: 40px; font-weight: 250; line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.stat .l { font-size: 13px; color: #9fbcc2; margin-top: 3px; }
+.stat[data-tone="bad"] .n { color: #ff8a77; }
+.stat[data-tone="warn"] .n { color: #f1cb52; }
+.stat[data-tone="ok"] .n { color: #5fd6a0; }
+#key { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px 20px; list-style: none; margin: 10px 0 0; padding: 14px 0 0; border-top: 1px solid rgba(255,255,255,0.1); font-size: 12.5px; color: #9fbcc2; }
+#key li { display: inline-flex; align-items: center; gap: 7px; }
+#key svg { width: 14px; height: 14px; }
+
+/* Segments shared by dials and legend: filled = done, outline = still to do */
+.seg { stroke-linejoin: round; }
+.seg.done-ontime { fill: var(--ok); }
+.seg.done-late { fill: var(--warn); }
+.seg.todo-overdue { fill: rgba(229,83,63,0.18); stroke: var(--bad); stroke-width: 1.6; }
+.seg.todo-behind { fill: rgba(231,180,22,0.14); stroke: var(--warn); stroke-width: 1.6; }
+.seg.todo-open { fill: none; stroke: #5b7783; stroke-width: 1.4; }
+
+/* Quiet panels */
+.panel { min-width: 0; }
+.panel h2 { margin: 0 0 8px; font-size: 15px; font-weight: 600; color: var(--ink); letter-spacing: -0.005em; }
+.pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; }
 
 svg text { fill: var(--ink-2); font-family: var(--font); font-size: 12px; }
 svg .axis line, svg .axis path { stroke: var(--line); }
 svg .grid { stroke: var(--grid); }
-svg .ontime { fill: var(--c-ontime); } svg .late { fill: var(--c-late); }
-svg .overdue { fill: var(--c-overdue); } svg .open { fill: var(--c-open); opacity: 0.55; }
-svg .plan-bar { fill: var(--c-plan); opacity: 0.45; }
+svg .band { fill: var(--ink); opacity: 0.035; }
+svg .plan-bar { fill: var(--plan); opacity: 0.55; }
+svg .ok { fill: var(--ok); } svg .warn { fill: var(--warn); } svg .bad { fill: var(--bad); } svg .open { fill: #6b95d6; opacity: 0.8; }
 svg .now-line { stroke: var(--blue); stroke-width: 1.5; stroke-dasharray: 4 3; }
 svg .val { fill: var(--ink); font-weight: 600; }
-svg .ring-bg { stroke: var(--grid); }
-svg .ring-fg { stroke: var(--c-ontime); }
-svg .ring-fg.blue { stroke: var(--blue); }
-svg .curve-due { fill: none; stroke: var(--ink-3); stroke-dasharray: 4 3; stroke-width: 1.5; }
-svg .curve-plan { fill: none; stroke: var(--c-plan); stroke-width: 2; }
-svg .curve-actual { fill: none; stroke: var(--c-ontime); stroke-width: 3; }
+svg .curve-due { fill: none; stroke: var(--ink-3); stroke-dasharray: 4 4; stroke-width: 1.4; }
+svg .curve-plan { fill: none; stroke: var(--plan); stroke-width: 2.2; }
+svg .curve-actual { fill: none; stroke: var(--ok); stroke-width: 3.2; stroke-linejoin: round; }
+svg .gauge-bg { fill: none; stroke: var(--grid); stroke-width: 9; }
+svg .gauge-plan { fill: none; stroke: var(--plan); stroke-width: 2; stroke-dasharray: 2 3; }
+svg .gauge-fg { fill: none; stroke: var(--ok); stroke-width: 9; stroke-linecap: round; }
+svg .stem { stroke-width: 3; stroke-linecap: round; }
+svg .stem.bad { stroke: var(--bad); } svg .stem.warn { stroke: var(--warn); }
+svg .dot.bad { fill: var(--bad); } svg .dot.warn { fill: var(--warn); }
 
 @media (max-width: 900px) {
-  #board { grid-template-columns: 1fr; }
-  .kpis-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #hero { grid-template-columns: 1fr; padding: 22px 18px 16px; }
+  #stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pair { grid-template-columns: 1fr; }
+  #dials { flex-wrap: nowrap; gap: 4px; }
+  .dial svg { width: min(30vw, 150px); height: auto; }
+  .dial .big { font-size: 38px; }
   #report-main { padding: 12px; }
 }
 @media print {
   .bar a, .bar button, #alert { display: none !important; }
-  body.report { background: #fff; }
-  .card, .kpi { break-inside: avoid; }
+  body.report { background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  #hero { break-inside: avoid; }
 }

@@ -18,12 +18,6 @@
     <h1>Execution report</h1>
     <span id="asof" class="muted"></span>
     <span class="spacer"></span>
-    <ul class="legend-inline" aria-label="Legend">
-      <li><i class="sw ontime"></i>On time</li>
-      <li><i class="sw late"></i>Finished late</li>
-      <li><i class="sw overdue"></i>Overdue</li>
-      <li><i class="sw open"></i>Open</li>
-    </ul>
     <a class="button-link" href="floor.html">Floor</a>
     <button id="print-btn" type="button">PDF</button>
     <button id="theme-btn" type="button" aria-pressed="false">Dark mode</button>
@@ -37,12 +31,24 @@
     </section>
 
     <div id="board" hidden>
-      <section class="kpis-row" id="kpis"></section>
-      <section class="card"><h2>Per day</h2><div id="chart-days"></div></section>
-      <section class="card"><h2>Orders finished, cumulative</h2><div id="chart-curve"></div></section>
-      <section class="card wide"><h2>Lines: plan vs actual</h2><div id="chart-gantt"></div></section>
-      <section class="card"><h2>Most overdue (hours)</h2><div id="chart-late"></div></section>
-      <section class="card"><h2>Line hours</h2><div id="chart-hours"></div></section>
+      <section id="hero" aria-label="Three-day outcome">
+        <div id="dials"></div>
+        <div id="stats"></div>
+        <ul id="key" aria-label="Legend">
+          <li><svg viewBox="0 0 14 14"><rect class="seg done-ontime" x="1" y="1" width="12" height="12" rx="3"/></svg>On time</li>
+          <li><svg viewBox="0 0 14 14"><rect class="seg done-late" x="1" y="1" width="12" height="12" rx="3"/></svg>Finished late</li>
+          <li><svg viewBox="0 0 14 14"><rect class="seg todo-overdue" x="1.5" y="1.5" width="11" height="11" rx="3"/></svg>Overdue</li>
+          <li><svg viewBox="0 0 14 14"><rect class="seg todo-behind" x="1.5" y="1.5" width="11" height="11" rx="3"/></svg>Behind plan</li>
+          <li><svg viewBox="0 0 14 14"><rect class="seg todo-open" x="1.5" y="1.5" width="11" height="11" rx="3"/></svg>Not due yet</li>
+        </ul>
+      </section>
+
+      <section class="panel"><h2>Finished so far</h2><div id="chart-curve"></div></section>
+      <section class="panel"><h2>Lines, plan against actual</h2><div id="chart-gantt"></div></section>
+      <div class="pair">
+        <section class="panel"><h2>Furthest past due, in hours</h2><div id="chart-late"></div></section>
+        <section class="panel"><h2>Hours worked per line</h2><div id="chart-hours"></div></section>
+      </div>
     </div>
   </main>
 
