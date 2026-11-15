@@ -7,9 +7,8 @@ with a FastAPI backend and a D3.js dashboard.
 > synthetic, fictional data. It contains no proprietary algorithms, business rules, parameters
 > or data from any existing industrial scheduling system.
 
-**Status:** Phase 4 done (engine, seeded synthetic data, PostgreSQL persistence with Alembic
-migrations, and a service layer that stores scenarios and runs). The API and dashboard are not
-built yet.
+**Status:** Phase 5 done (engine, seeded synthetic data, PostgreSQL persistence, and a REST
+API). The dashboard is not built yet.
 
 ## Planned scope (MVP)
 
@@ -70,6 +69,29 @@ alembic upgrade head
 
 Integration tests need a database: set `TEST_DATABASE_URL` (CI uses a Postgres service
 container). Without it they are skipped.
+
+## API
+
+```bash
+uvicorn scheduler.api.main:app --reload   # interactive docs at /docs
+```
+
+| Method and path | Purpose |
+|---|---|
+| `GET /api/health` | liveness |
+| `POST /api/data/generate` | create a scenario from seeded synthetic data (`preset` or custom sizes) |
+| `GET/POST /api/scenarios` | list / create scenarios |
+| `GET/DELETE /api/scenarios/{id}` | read / delete a scenario |
+| `POST /api/scenarios/{id}/clone` | copy inputs into a new editable scenario |
+| `PUT /api/scenarios/{id}/instance` | replace resources and jobs (409 once the scenario has runs) |
+| `POST /api/scenarios/{id}/solve` | solve synchronously and store a run |
+| `GET /api/scenarios/{id}/runs`, `GET /api/runs/{id}` | list runs / read one with its schedule |
+
+Errors: 404 unknown id, 409 locked inputs, 422 invalid input (engine problems are listed under
+`issues`), 500 if the solver's output ever fails independent verification. A solve always returns
+201 with a `status` of `OPTIMAL`, `FEASIBLE`, `INFEASIBLE` or `UNKNOWN`; only `OPTIMAL` means
+optimality was proven. `time_limit_s` is capped by the server setting `MAX_TIME_LIMIT_S`
+(default 60).
 
 ## Roadmap
 
