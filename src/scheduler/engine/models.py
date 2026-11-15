@@ -99,6 +99,24 @@ def option_sets(job: Job, resources: dict[str, Resource]) -> list[tuple[Resource
     ]
 
 
+def blocked_periods(resource: Resource, horizon: int) -> list[tuple[int, int]]:
+    """Closed periods of ``resource`` inside ``[0, horizon)`` as ``(start, end)`` pairs."""
+    windows = sorted(
+        (max(0, w.start), min(horizon, w.end))
+        for w in resource.windows
+        if w.end > w.start and w.end > 0 and w.start < horizon
+    )
+    blocked: list[tuple[int, int]] = []
+    cursor = 0
+    for start, end in windows:
+        if start > cursor:
+            blocked.append((cursor, start))
+        cursor = max(cursor, end)
+    if cursor < horizon:
+        blocked.append((cursor, horizon))
+    return blocked
+
+
 @dataclass(frozen=True, slots=True)
 class ProblemInstance:
     """A complete scheduling problem over the horizon ``[0, horizon)``."""
@@ -136,6 +154,9 @@ class SolveParams:
     num_workers: int = 1
     random_seed: int = 0
     weighted: bool = True
+    # Rule: a resource may not sit idle while a job it can run has not started yet. It may idle
+    # only after every job it could run has started. Needs every job's release time to be 0.
+    no_idle: bool = False
 
 
 @dataclass(frozen=True, slots=True)

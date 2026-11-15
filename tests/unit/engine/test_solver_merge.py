@@ -65,3 +65,39 @@ def test_priority_decides_who_gets_the_lines_first() -> None:
     ends = {a.job_id: a.end for a in result.assignments}
     assert ends["HIGH"] == 10 and ends["LOW"] == 20
     assert result.objective == 10  # LOW is late by 10 at weight 1
+
+
+def test_no_idle_keeps_every_line_busy_until_the_last_job_starts() -> None:
+    problem = ProblemInstance(
+        horizon=400,
+        resources=(A, B),
+        jobs=tuple(opc(f"J{i}", 1_000 * (i + 1), due=10 * (i + 1)) for i in range(6)),
+    )
+    result = solve(problem, SolveParams(time_limit_s=20, no_idle=True))
+    assert result.status in (SolveStatus.OPTIMAL, SolveStatus.FEASIBLE)
+    assert verify_schedule(problem, result.assignments, no_idle=True) == []
+
+
+def test_no_idle_on_the_opc_sample_is_at_least_as_good_as_the_start_schedule() -> None:
+    from scheduler.engine.heuristic import sequential_merge_schedule
+    from scheduler.engine.metrics import objective_value
+    from scheduler.synthetic.generator import preset
+
+    problem = preset("opc")
+    result = solve(problem, SolveParams(time_limit_s=20, no_idle=True))
+    assert result.status in (SolveStatus.OPTIMAL, SolveStatus.FEASIBLE)
+    assert verify_schedule(problem, result.assignments, no_idle=True) == []
+    start = sequential_merge_schedule(problem)
+    assert start is not None
+    assert result.objective is not None
+    assert result.objective <= objective_value(problem, start)
+
+
+def test_no_idle_needs_release_times_of_zero() -> None:
+    late = Job("J", "J", duration=0, due=50, eligible=("A", "B"), work=1_000, release=5)
+    result = solve(
+        ProblemInstance(horizon=100, resources=(A, B), jobs=(late,)),
+        SolveParams(time_limit_s=5, no_idle=True),
+    )
+    assert result.status is SolveStatus.MODEL_INVALID
+    assert any("released at time 0" in m for m in result.messages)

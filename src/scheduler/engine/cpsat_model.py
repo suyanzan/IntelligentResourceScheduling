@@ -26,7 +26,16 @@ from dataclasses import dataclass
 
 from ortools.sat.python import cp_model
 
-from scheduler.engine.models import Job, ProblemInstance, Resource, duration_on, option_sets
+from scheduler.engine.models import (
+    Job,
+    ProblemInstance,
+    Resource,
+    blocked_periods,
+    duration_on,
+    option_sets,
+)
+
+__all__ = ["BuiltModel", "Option", "blocked_periods", "build_model"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,34 +53,24 @@ class BuiltModel:
 
     model: cp_model.CpModel
     starts: dict[str, cp_model.IntVar]
+    ends: dict[str, cp_model.IntVar]
     options: dict[str, list[Option]]
 
 
-def blocked_periods(resource: Resource, horizon: int) -> list[tuple[int, int]]:
-    """Closed periods of ``resource`` inside ``[0, horizon)`` as ``(start, end)`` pairs."""
-    windows = sorted(
-        (max(0, w.start), min(horizon, w.end))
-        for w in resource.windows
-        if w.end > w.start and w.end > 0 and w.start < horizon
-    )
-    blocked: list[tuple[int, int]] = []
-    cursor = 0
-    for start, end in windows:
-        if start > cursor:
-            blocked.append((cursor, start))
-        cursor = max(cursor, end)
-    if cursor < horizon:
-        blocked.append((cursor, horizon))
-    return blocked
+def build_model(
+    problem: ProblemInstance, *, weighted: bool = True, no_idle: bool = False
+) -> BuiltModel:
+    """Build the CP-SAT model for a validated problem instance.
 
-
-def build_model(problem: ProblemInstance, *, weighted: bool = True) -> BuiltModel:
-    """Build the CP-SAT model for a validated problem instance."""
+    With ``no_idle`` a resource must stay busy (or closed) from time 0 until the last job it
+    could run has started; see :func:`_add_no_idle`.
+    """
     model = cp_model.CpModel()
     horizon = problem.horizon
     resources = problem.resource_by_id()
 
     starts: dict[str, cp_model.IntVar] = {}
+    ends: dict[str, cp_model.IntVar] = {}
     options: dict[str, list[Option]] = {}
     intervals_by_resource: dict[str, list[cp_model.IntervalVar]] = {
         r.id: [] for r in problem.resources
@@ -80,7 +79,7 @@ def build_model(problem: ProblemInstance, *, weighted: bool = True) -> BuiltMode
 
     for job in problem.jobs:
         _add_job(
-            model, job, resources, horizon, weighted, starts, options,
+            model, job, resources, horizon, weighted, starts, ends, options,
             intervals_by_resource, tardiness_terms,
         )
 
@@ -91,8 +90,11 @@ def build_model(problem: ProblemInstance, *, weighted: bool = True) -> BuiltMode
         ]
         model.add_no_overlap([*intervals_by_resource[resource.id], *fixed])
 
+    if no_idle:
+        _add_no_idle(model, problem, starts, ends, options)
+
     model.minimize(sum(tardiness_terms))
-    return BuiltModel(model=model, starts=starts, options=options)
+    return BuiltModel(model=model, starts=starts, ends=ends, options=options)
 
 
 def _add_job(
@@ -102,6 +104,7 @@ def _add_job(
     horizon: int,
     weighted: bool,
     starts: dict[str, cp_model.IntVar],
+    ends: dict[str, cp_model.IntVar],
     options: dict[str, list[Option]],
     intervals_by_resource: dict[str, list[cp_model.IntervalVar]],
     tardiness_terms: list[cp_model.LinearExpr],
@@ -109,6 +112,7 @@ def _add_job(
     start = model.new_int_var(job.release, horizon, f"start_{job.id}")
     end = model.new_int_var(job.release, horizon, f"end_{job.id}")
     starts[job.id] = start
+    ends[job.id] = end
 
     chosen: list[Option] = []
     for subset in option_sets(job, resources):
@@ -131,3 +135,60 @@ def _add_job(
     late = model.new_int_var(0, horizon, f"late_{job.id}")
     model.add(late >= end - job.due)
     tardiness_terms.append((job.priority if weighted else 1) * late)
+
+
+def _add_no_idle(
+    model: cp_model.CpModel,
+    problem: ProblemInstance,
+    starts: dict[str, cp_model.IntVar],
+    ends: dict[str, cp_model.IntVar],
+    options: dict[str, list[Option]],
+) -> None:
+    """A resource may not be idle while a job it can run has not started.
+
+    For resource ``r`` let ``L`` be the latest start among the jobs that can use ``r``. Before
+    ``L`` some such job is still waiting, so ``r`` must be busy or closed for the whole of
+    ``[0, L)``. Busy time and closed time never overlap (``NoOverlap``), so this holds exactly
+    when ``busy(r) + closed(r)`` measured inside ``[0, L)`` equals ``L``. After ``L`` the
+    resource may idle. Jobs that cannot use ``r`` at all are ignored for ``r``.
+    """
+    horizon = problem.horizon
+    for resource in problem.resources:
+        rid = resource.id
+        uses: dict[str, cp_model.IntVar] = {}
+        for job in problem.jobs:
+            literals = [o.literal for o in options[job.id] if rid in o.resource_ids]
+            if not literals:
+                continue
+            if len(literals) == 1:
+                uses[job.id] = literals[0]
+            else:
+                used = model.new_bool_var(f"uses_{job.id}_{rid}")
+                model.add(used == cp_model.LinearExpr.sum(literals))
+                uses[job.id] = used
+        if not uses:
+            continue
+
+        last = model.new_int_var(0, horizon, f"last_start_{rid}")
+        model.add_max_equality(last, [starts[job_id] for job_id in uses])
+
+        covered: list[cp_model.IntVar] = []
+        for job_id, used in uses.items():
+            capped = model.new_int_var(0, horizon, f"capped_{job_id}_{rid}")
+            model.add_min_equality(capped, [ends[job_id], last])
+            busy = model.new_int_var(0, horizon, f"busy_{job_id}_{rid}")
+            model.add(busy == capped - starts[job_id]).only_enforce_if(used)
+            model.add(busy == 0).only_enforce_if(used.negated())
+            covered.append(busy)
+
+        for block_start, block_end in blocked_periods(resource, horizon):
+            span = block_end - block_start
+            gap = model.new_int_var(-horizon, horizon, f"gap_{rid}_{block_start}")
+            model.add(gap == last - block_start)
+            positive = model.new_int_var(0, horizon, f"pos_{rid}_{block_start}")
+            model.add_max_equality(positive, [gap, 0])
+            closed = model.new_int_var(0, span, f"closed_{rid}_{block_start}_len")
+            model.add_min_equality(closed, [positive, span])
+            covered.append(closed)
+
+        model.add(cp_model.LinearExpr.sum(covered) == last)

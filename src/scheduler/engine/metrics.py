@@ -17,6 +17,7 @@ from scheduler.engine.models import (
     Metrics,
     ProblemInstance,
     Window,
+    blocked_periods,
     duration_on,
 )
 
@@ -135,13 +136,50 @@ def compute_metrics(
     )
 
 
-def verify_schedule(problem: ProblemInstance, assignments: Sequence[Assignment]) -> list[str]:
+def idle_violations(problem: ProblemInstance, assignments: Sequence[Assignment]) -> list[str]:
+    """Check the no-idle rule: a resource may not be idle (while open) before the latest start
+    among the jobs that can use it. After that point it may idle freely."""
+    violations: list[str] = []
+    starts = {a.job_id: a.start for a in assignments}
+    for resource in problem.resources:
+        waiting = [
+            starts[j.id] for j in problem.jobs if resource.id in j.eligible and j.id in starts
+        ]
+        if not waiting:
+            continue
+        last = max(waiting)
+        covered = sorted(
+            [(a.start, a.end) for a in assignments if a.resource_id == resource.id]
+            + blocked_periods(resource, problem.horizon)
+        )
+        cursor = 0
+        for start, end in covered:
+            if start >= last:
+                break
+            if start > cursor:
+                violations.append(
+                    f"resource {resource.id!r} is idle during [{cursor}, {start}) although a job "
+                    f"it can run starts only at {last}"
+                )
+            cursor = max(cursor, end)
+        if cursor < last:
+            violations.append(
+                f"resource {resource.id!r} is idle during [{cursor}, {last}) although a job "
+                f"it can run starts only at {last}"
+            )
+    return violations
+
+
+def verify_schedule(
+    problem: ProblemInstance, assignments: Sequence[Assignment], *, no_idle: bool = False
+) -> list[str]:
     """Check a schedule against the problem; an empty list means it is valid.
 
     Checks: every job placed, known job and resources, eligibility, one shared start and end for
     all resources of a job, the right duration (fixed, or ``ceil(work / total capacity)``),
     release time, horizon, containment in a single availability window of every used resource,
-    and no overlap on a resource.
+    and no overlap on a resource. With ``no_idle`` it also checks the no-idle rule
+    (:func:`idle_violations`).
     """
     violations: list[str] = []
     jobs = problem.job_by_id()
@@ -181,6 +219,8 @@ def verify_schedule(problem: ProblemInstance, assignments: Sequence[Assignment])
                     f"jobs {prev.job_id!r} and {cur.job_id!r} overlap on resource {resource_id!r}"
                 )
 
+    if no_idle and not violations:
+        violations.extend(idle_violations(problem, assignments))
     return violations
 
 
