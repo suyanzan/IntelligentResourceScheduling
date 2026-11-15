@@ -8,7 +8,7 @@ import pytest
 FRONTEND = Path(__file__).resolve().parents[2] / "frontend"
 
 
-@pytest.mark.parametrize("page", ["index.html", "floor.html"])
+@pytest.mark.parametrize("page", ["index.html", "floor.html", "report.html"])
 def test_page_references_exist(page: str) -> None:
     html = (FRONTEND / page).read_text(encoding="utf-8")
     refs = re.findall(r'(?:src|href)="([^"#]+)"', html)

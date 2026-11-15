@@ -187,3 +187,7 @@ also starts sorted by due date.
 There is no login: the operator name is free text. Do not expose the page beyond the plant network without adding authentication. Frontend rules are unit-tested with `node --test frontend/tests/*.test.mjs`.
 
 The **OPC live** sample covers exactly three days (today, tomorrow, the day after; 72 time units). Order sizes are 1,000–15,000 CPU-hours so that the three days can be worked off even when the plan starts late in the day.
+
+### Execution report
+
+`/report.html` is a charts-only summary of the three-day plan for managers: on-time and finished rings, outcomes per due day, cumulative due/planned/finished curves, plan versus actual per line, the most overdue orders and hours per line. It reads the active plan, refreshes every minute and prints to PDF.

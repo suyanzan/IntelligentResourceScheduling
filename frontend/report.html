@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Execution report</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/report.css">
+  <script>
+    try {
+      var saved = localStorage.getItem("theme");
+      if (saved === "light" || saved === "dark") document.documentElement.dataset.theme = saved;
+    } catch (e) { /* storage unavailable: follow the system setting */ }
+  </script>
+</head>
+<body class="report">
+  <header class="bar">
+    <h1>Execution report</h1>
+    <span id="asof" class="muted"></span>
+    <span class="spacer"></span>
+    <ul class="legend-inline" aria-label="Legend">
+      <li><i class="sw ontime"></i>On time</li>
+      <li><i class="sw late"></i>Finished late</li>
+      <li><i class="sw overdue"></i>Overdue</li>
+      <li><i class="sw open"></i>Open</li>
+    </ul>
+    <a class="button-link" href="floor.html">Floor</a>
+    <button id="print-btn" type="button">PDF</button>
+    <button id="theme-btn" type="button" aria-pressed="false">Dark mode</button>
+  </header>
+  <div id="alert" role="alert" hidden></div>
+
+  <main id="report-main">
+    <section id="no-plan" class="empty" hidden>
+      <h2>No plan on the floor yet</h2>
+      <a class="button-link primary" href="./">Open scheduling</a>
+    </section>
+
+    <div id="board" hidden>
+      <section class="kpis-row" id="kpis"></section>
+      <section class="card"><h2>Per day</h2><div id="chart-days"></div></section>
+      <section class="card"><h2>Orders finished, cumulative</h2><div id="chart-curve"></div></section>
+      <section class="card wide"><h2>Lines: plan vs actual</h2><div id="chart-gantt"></div></section>
+      <section class="card"><h2>Most overdue (hours)</h2><div id="chart-late"></div></section>
+      <section class="card"><h2>Line hours</h2><div id="chart-hours"></div></section>
+    </div>
+  </main>
+
+  <script src="vendor/d3.v7.9.0.min.js"></script>
+  <script type="module" src="js/report.js"></script>
+</body>
+</html>
