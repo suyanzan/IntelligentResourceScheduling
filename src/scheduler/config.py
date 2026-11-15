@@ -31,6 +31,9 @@ class Settings:
     database_url: str
     max_time_limit_s: float
     frontend_dir: str | None = None  # served at "/" when set; None serves the API only
+    # Local time of the plant as a fixed offset from UTC in minutes (480 = UTC+8, no DST). Plan
+    # dates ("today") and the planned times shown to the floor use it.
+    plan_utc_offset_minutes: int = 480
 
 
 def get_settings(env: Mapping[str, str] | None = None) -> Settings:
@@ -41,4 +44,5 @@ def get_settings(env: Mapping[str, str] | None = None) -> Settings:
         frontend_dir=(source["FRONTEND_DIR"] or None)
         if "FRONTEND_DIR" in source
         else default_frontend_dir(),
+        plan_utc_offset_minutes=int(source.get("PLAN_UTC_OFFSET_MINUTES", 480)),
     )

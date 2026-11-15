@@ -229,3 +229,89 @@ def comparison_out(compared: RunComparison) -> schemas.ComparisonOut:
         moved_jobs=result.moved_jobs,
         notes=list(result.notes),
     )
+
+
+# --- production floor ------------------------------------------------------------------------
+
+
+def plan_detail(
+    plan: orm.ReleasedPlan, *, utc_offset_minutes: int, now: dt.datetime
+) -> schemas.PlanOut:
+    """A released plan with planned times in plant-local time and what really happened."""
+    scenario = plan.scenario
+    tz = dt.timezone(dt.timedelta(minutes=utc_offset_minutes))
+    start_date = scenario.horizon_start
+    assert start_date is not None  # guaranteed when the plan was released
+
+    def at(unit: int) -> dt.datetime:
+        return unit_to_datetime(start_date, unit, scenario.time_unit_minutes).replace(tzinfo=tz)
+
+    placed: dict[int, list[orm.Assignment]] = {}
+    for a in plan.run.assignments:
+        placed.setdefault(a.job_id, []).append(a)
+
+    lines = {a.resource.code: a.resource for a in plan.run.assignments}
+    jobs: list[schemas.FloorJobOut] = []
+    for actual in plan.actuals:
+        rows = placed.get(actual.job_id, [])
+        if not rows:
+            continue
+        job = actual.job
+        first = rows[0]
+        jobs.append(
+            schemas.FloorJobOut(
+                id=job.code,
+                name=job.name,
+                layer=job.layer,
+                priority=job.priority,
+                work=job.work,
+                after=job.after_code,
+                cycle_limit_minutes=(
+                    None
+                    if job.cycle_limit is None
+                    else job.cycle_limit * scenario.time_unit_minutes
+                ),
+                due_at=at(job.due_unit),
+                planned_start_at=at(first.start_unit),
+                planned_end_at=at(first.end_unit),
+                lines=sorted(r.resource.code for r in rows),
+                status=actual.status,  # type: ignore[arg-type]
+                actual_start_at=actual.actual_start,
+                actual_end_at=actual.actual_end,
+                note=actual.note,
+                updated_by=actual.updated_by,
+                updated_at=actual.updated_at,
+            )
+        )
+    jobs.sort(key=lambda j: (j.planned_start_at, j.id))
+    return schemas.PlanOut(
+        id=plan.id,
+        active=plan.active,
+        scenario_id=scenario.id,
+        scenario_name=scenario.name,
+        run_id=plan.run_id,
+        released_at=plan.released_at,
+        released_by=plan.released_by,
+        note=plan.note,
+        utc_offset_minutes=utc_offset_minutes,
+        time_unit_minutes=scenario.time_unit_minutes,
+        server_time=now,
+        lines=[
+            schemas.FloorLineOut(id=code, name=r.name, capacity=r.capacity)
+            for code, r in sorted(lines.items())
+        ],
+        jobs=jobs,
+    )
+
+
+def event_out(event: orm.PlanEvent) -> schemas.EventOut:
+    return schemas.EventOut(
+        id=event.id,
+        job_id=event.job.code,
+        job_name=event.job.name,
+        action=event.action,
+        actor=event.actor,
+        recorded_at=event.recorded_at,
+        effective_at=event.effective_at,
+        note=event.note,
+    )

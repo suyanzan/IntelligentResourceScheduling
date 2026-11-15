@@ -33,3 +33,8 @@ def test_frontend_dir_setting() -> None:
     assert get_settings({"FRONTEND_DIR": ""}).frontend_dir is None
     default = get_settings({}).frontend_dir
     assert default is None or default.endswith("frontend")
+
+
+def test_plan_utc_offset_defaults_to_taipei_and_can_be_overridden() -> None:
+    assert get_settings({}).plan_utc_offset_minutes == 480
+    assert get_settings({"PLAN_UTC_OFFSET_MINUTES": "0"}).plan_utc_offset_minutes == 0

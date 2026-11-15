@@ -1,0 +1,152 @@
+"""Releasing a plan to the production floor and recording what really happened.
+
+Needs OR-Tools (to solve a plan) and PostgreSQL.
+"""
+
+import datetime as dt
+from collections.abc import Iterator
+from typing import Any
+
+import pytest
+
+pytest.importorskip("ortools")
+
+from fastapi.testclient import TestClient  # noqa: E402
+from sqlalchemy.orm import Session  # noqa: E402
+
+from scheduler.api.deps import get_session  # noqa: E402
+from scheduler.api.main import create_app  # noqa: E402
+from scheduler.config import Settings  # noqa: E402
+
+TAIPEI = dt.timezone(dt.timedelta(hours=8))
+
+
+@pytest.fixture
+def client(session: Session) -> Iterator[TestClient]:
+    app = create_app(settings=Settings(database_url="unused", max_time_limit_s=30.0))
+    app.dependency_overrides[get_session] = lambda: session
+    with TestClient(app) as test_client:
+        yield test_client
+
+
+def solved_run(client: TestClient) -> tuple[dict[str, Any], dict[str, Any]]:
+    scenario = client.post("/api/data/generate", json={"preset": "opc_live"}).json()
+    run = client.post(
+        f"/api/scenarios/{scenario['id']}/solve", json={"time_limit_s": 5, "no_idle": True}
+    ).json()
+    assert run["status"] in ("OPTIMAL", "FEASIBLE")
+    return scenario, run
+
+
+def release(client: TestClient, run_id: int, **extra: Any) -> dict[str, Any]:
+    response = client.post("/api/floor/plans", json={"run_id": run_id, **extra})
+    assert response.status_code == 201, response.text
+    return response.json()  # type: ignore[no-any-return]
+
+
+def job(plan: dict[str, Any], job_id: str) -> dict[str, Any]:
+    return next(j for j in plan["jobs"] if j["id"] == job_id)
+
+
+def test_sample_data_starts_today_in_plant_time(client: TestClient) -> None:
+    before = dt.datetime.now(TAIPEI)
+    scenario, _ = solved_run(client)
+    after = dt.datetime.now(TAIPEI)
+    assert scenario["horizon_start"] in (before.date().isoformat(), after.date().isoformat())
+    starts = {r["id"]: r["windows"][0]["start"] for r in scenario["instance"]["resources"]}
+    assert starts["D"] in (before.hour, after.hour)  # free lines start at the current hour
+    assert starts["A"] == starts["D"] + 12  # the others finish the current order first
+
+
+def test_no_plan_until_one_is_released(client: TestClient) -> None:
+    assert client.get("/api/floor/plan").status_code == 404
+    assert client.post("/api/floor/plans", json={"run_id": 99999}).status_code == 404
+
+
+def test_release_returns_the_plan_in_plant_time(client: TestClient) -> None:
+    _, run = solved_run(client)
+    plan = release(client, run["id"], released_by="Scheduler", note="first release")
+    assert plan["active"] is True and plan["released_by"] == "Scheduler"
+    assert plan["utc_offset_minutes"] == 480
+    assert len(plan["jobs"]) == 40 and {line["id"] for line in plan["lines"]} == set("ABCDE")
+    assert {j["status"] for j in plan["jobs"]} == {"planned"}
+    for item in plan["jobs"]:
+        assert item["due_at"].endswith("+08:00")
+        assert item["planned_start_at"] < item["planned_end_at"]
+    today = dt.datetime.now(TAIPEI).date()
+    dues = {dt.datetime.fromisoformat(j["due_at"]).date() for j in plan["jobs"]}
+    assert dues <= {today + dt.timedelta(days=n) for n in (1, 2, 3)}  # end of today/tomorrow/...
+    assert client.get("/api/floor/plan").json()["id"] == plan["id"]
+
+
+def test_start_complete_note_and_undo(client: TestClient) -> None:
+    _, run = solved_run(client)
+    plan = release(client, run["id"])
+    code = plan["jobs"][0]["id"]
+    base = f"/api/floor/plans/{plan['id']}/jobs/{code}"
+
+    started = client.post(f"{base}/start", json={"by": "Mei", "note": "on line B"}).json()
+    row = job(started, code)
+    assert row["status"] == "running" and row["actual_start_at"] and row["updated_by"] == "Mei"
+    assert row["note"] == "on line B" and row["actual_end_at"] is None
+
+    finished = client.post(f"{base}/complete", json={"by": "Mei"}).json()
+    row = job(finished, code)
+    assert row["status"] == "done" and row["actual_end_at"] >= row["actual_start_at"]
+
+    back = client.post(f"{base}/revert", json={"by": "Mei"}).json()
+    assert job(back, code)["status"] == "running" and job(back, code)["actual_end_at"] is None
+    back = client.post(f"{base}/revert", json={}).json()
+    assert job(back, code)["status"] == "planned" and job(back, code)["actual_start_at"] is None
+
+    noted = client.post(f"{base}/note", json={"note": "waiting for the mask", "by": "Lee"}).json()
+    assert job(noted, code)["note"] == "waiting for the mask"
+
+    events = client.get(f"/api/floor/plans/{plan['id']}/events").json()
+    assert [e["action"] for e in events] == ["note", "revert", "revert", "complete", "start"]
+    assert events[-1]["actor"] == "Mei" and events[-1]["job_id"] == code
+
+
+def test_a_job_never_started_needs_a_start_time_to_complete(client: TestClient) -> None:
+    _, run = solved_run(client)
+    plan = release(client, run["id"])
+    base = f"/api/floor/plans/{plan['id']}/jobs/{plan['jobs'][1]['id']}"
+    refused = client.post(f"{base}/complete", json={})
+    assert refused.status_code == 409 and "start time" in refused.json()["detail"]
+    now = dt.datetime.now(dt.UTC)
+    ok = client.post(
+        f"{base}/complete",
+        json={
+            "started_at": (now - dt.timedelta(hours=2)).isoformat(),
+            "at": (now - dt.timedelta(minutes=5)).isoformat(),
+        },
+    )
+    assert ok.status_code == 200
+    assert job(ok.json(), plan["jobs"][1]["id"])["status"] == "done"
+
+
+def test_rule_violations_are_conflicts(client: TestClient) -> None:
+    _, run = solved_run(client)
+    plan = release(client, run["id"])
+    code = plan["jobs"][0]["id"]
+    base = f"/api/floor/plans/{plan['id']}/jobs/{code}"
+    future = (dt.datetime.now(dt.UTC) + dt.timedelta(hours=3)).isoformat()
+    assert client.post(f"{base}/start", json={"at": future}).status_code == 409
+    assert client.post(f"{base}/start", json={}).status_code == 200
+    assert client.post(f"{base}/start", json={}).status_code == 409  # already running
+    naive = client.post(f"{base}/complete", json={"at": "2026-11-15T10:00:00"})
+    assert naive.status_code == 422  # a time without a zone is refused by the schema
+    assert client.post(f"{base}/revert", json={}).status_code == 200
+    assert client.post(f"{base}/revert", json={}).status_code == 409  # nothing left to undo
+    assert client.post(f"/api/floor/plans/{plan['id']}/jobs/NOPE/start", json={}).status_code == 404
+
+
+def test_a_new_release_retires_the_old_plan(client: TestClient) -> None:
+    _, run = solved_run(client)
+    first = release(client, run["id"])
+    second = release(client, run["id"])
+    assert client.get("/api/floor/plan").json()["id"] == second["id"]
+    old = client.get(f"/api/floor/plans/{first['id']}").json()
+    assert old["active"] is False
+    refused = client.post(f"/api/floor/plans/{first['id']}/jobs/{first['jobs'][0]['id']}/start")
+    assert refused.status_code == 409 and "replaced" in refused.json()["detail"]

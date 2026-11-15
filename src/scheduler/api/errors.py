@@ -10,10 +10,13 @@ from fastapi.responses import JSONResponse
 from scheduler.engine.solver import ScheduleVerificationError
 from scheduler.services.errors import (
     InvalidInstanceError,
+    PlanError,
+    PlanNotFoundError,
     RunNotFoundError,
     ScenarioLockedError,
     ScenarioNotFoundError,
 )
+from scheduler.services.floor_rules import FloorRuleError
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +44,9 @@ async def _verification_failed(_: Request, exc: Exception) -> JSONResponse:
 def register_error_handlers(app: FastAPI) -> None:
     app.add_exception_handler(ScenarioNotFoundError, _not_found)
     app.add_exception_handler(RunNotFoundError, _not_found)
+    app.add_exception_handler(PlanNotFoundError, _not_found)
+    app.add_exception_handler(PlanError, _locked)
+    app.add_exception_handler(FloorRuleError, _locked)
     app.add_exception_handler(ScenarioLockedError, _locked)
     app.add_exception_handler(InvalidInstanceError, _invalid_instance)
     app.add_exception_handler(ScheduleVerificationError, _verification_failed)

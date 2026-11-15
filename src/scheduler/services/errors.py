@@ -26,6 +26,15 @@ class ScenarioLockedError(RuntimeError):
         self.scenario_id = scenario_id
 
 
+class PlanNotFoundError(LookupError):
+    def __init__(self, message: str = "no plan has been released to the floor yet") -> None:
+        super().__init__(message)
+
+
+class PlanError(RuntimeError):
+    """A run cannot be released, or a floor update does not fit the job's state."""
+
+
 class InvalidInstanceError(ValueError):
     """The problem instance failed engine validation."""
 

@@ -10,7 +10,7 @@ from __future__ import annotations
 import datetime as dt
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import AwareDatetime, BaseModel, Field, model_validator
 
 # --- instance ----------------------------------------------------------------------------------
 
@@ -250,3 +250,89 @@ class ComparisonOut(BaseModel):
     jobs: list[JobDiffOut]
     moved_jobs: int
     notes: list[str]
+
+
+# --- production floor ------------------------------------------------------------------------
+
+
+class ReleaseRequest(BaseModel):
+    run_id: int
+    released_by: str = Field(default="", max_length=80)
+    note: str = Field(default="", max_length=2000)
+
+
+class StartRequest(BaseModel):
+    at: AwareDatetime | None = Field(default=None, description="Real start time; default now.")
+    by: str = Field(default="", max_length=80)
+    note: str | None = Field(default=None, max_length=2000)
+
+
+class CompleteRequest(BaseModel):
+    at: AwareDatetime | None = Field(default=None, description="Real finish time; default now.")
+    started_at: AwareDatetime | None = Field(
+        default=None, description="Real start time; required if the job was never started."
+    )
+    by: str = Field(default="", max_length=80)
+    note: str | None = Field(default=None, max_length=2000)
+
+
+class RevertRequest(BaseModel):
+    by: str = Field(default="", max_length=80)
+
+
+class NoteRequest(BaseModel):
+    note: str = Field(max_length=2000)
+    by: str = Field(default="", max_length=80)
+
+
+class FloorLineOut(BaseModel):
+    id: str
+    name: str
+    capacity: int
+
+
+class FloorJobOut(BaseModel):
+    id: str
+    name: str
+    layer: str
+    priority: int
+    work: int | None
+    after: str | None
+    cycle_limit_minutes: int | None
+    due_at: dt.datetime
+    planned_start_at: dt.datetime
+    planned_end_at: dt.datetime
+    lines: list[str]
+    status: Literal["planned", "running", "done"]
+    actual_start_at: dt.datetime | None
+    actual_end_at: dt.datetime | None
+    note: str
+    updated_by: str
+    updated_at: dt.datetime | None
+
+
+class PlanOut(BaseModel):
+    id: int
+    active: bool
+    scenario_id: int
+    scenario_name: str
+    run_id: int
+    released_at: dt.datetime
+    released_by: str
+    note: str
+    utc_offset_minutes: int
+    time_unit_minutes: int
+    server_time: dt.datetime
+    lines: list[FloorLineOut]
+    jobs: list[FloorJobOut]
+
+
+class EventOut(BaseModel):
+    id: int
+    job_id: str
+    job_name: str
+    action: str
+    actor: str
+    recorded_at: dt.datetime
+    effective_at: dt.datetime | None
+    note: str

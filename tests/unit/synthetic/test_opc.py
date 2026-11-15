@@ -99,3 +99,22 @@ def test_live_preset_start_schedule_is_valid_and_never_idles() -> None:
     schedule = best_start_schedule(problem, no_idle=True)
     assert schedule is not None
     assert verify_schedule(problem, schedule, no_idle=True) == []
+
+
+def test_live_preset_can_start_later_in_the_day() -> None:
+    from dataclasses import replace
+
+    config = replace(OPC_PRESETS["opc_live"], now_unit=19, busy_until=31)
+    problem = generate_opc(config)
+    starts = {r.id: r.windows[0].start for r in problem.resources}
+    assert starts == {"A": 31, "B": 31, "C": 31, "D": 19, "E": 19}
+    assert {j.due for j in problem.jobs} <= {24, 48, 72}
+    diffusion = [j for j in problem.jobs if j.layer == "DIFFUSION"]
+    assert all(j.release > 19 and j.due >= j.release + 12 for j in diffusion)
+    assert all(j.release >= 19 for j in problem.jobs if j.after is None)
+    from scheduler.engine.heuristic import best_start_schedule
+    from scheduler.engine.metrics import verify_schedule
+
+    schedule = best_start_schedule(problem, no_idle=True)
+    assert schedule is not None
+    assert verify_schedule(problem, schedule, no_idle=True) == []

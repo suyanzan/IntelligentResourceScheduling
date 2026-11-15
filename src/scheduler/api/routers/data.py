@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import dataclasses
 import datetime as dt
 
 from fastapi import APIRouter
 
 from scheduler.api import convert, schemas
-from scheduler.api.deps import SessionDep
+from scheduler.api.deps import SessionDep, SettingsDep
 from scheduler.services import scheduling_service as svc
 from scheduler.synthetic.generator import PRESETS, GeneratorConfig, generate
 from scheduler.synthetic.opc import OPC_PRESETS, generate_opc
@@ -17,13 +18,31 @@ router = APIRouter(prefix="/api/data", tags=["synthetic data"])
 # Generated data treats day 0 as a Monday; 2026-01-05 is one, so calendars line up with dates.
 SYNTHETIC_HORIZON_START = dt.date(2026, 1, 5)
 
+# Hours the lines A, B and C still need for the order they are running when an OPC plan starts.
+BUSY_HOURS = 12
+
 
 @router.post("/generate", status_code=201)
-def generate_scenario(body: schemas.GenerateRequest, session: SessionDep) -> schemas.ScenarioDetail:
-    """Create a scenario from fully fictional, seeded data (same request, same data)."""
+def generate_scenario(
+    body: schemas.GenerateRequest, session: SessionDep, settings: SettingsDep
+) -> schemas.ScenarioDetail:
+    """Create a scenario from fully fictional, seeded data (same request, same data).
+
+    The OPC presets start today (plant time): unit 0 is midnight today, the plan begins at the
+    current hour, and due dates fall on today, tomorrow and the day after.
+    """
     label: str
+    horizon_start = SYNTHETIC_HORIZON_START
     if body.preset in OPC_PRESETS:
+        local_now = dt.datetime.now(
+            dt.timezone(dt.timedelta(minutes=settings.plan_utc_offset_minutes))
+        )
+        horizon_start = local_now.date()
         opc_config = OPC_PRESETS[body.preset]
+        if opc_config.live:
+            opc_config = dataclasses.replace(
+                opc_config, now_unit=local_now.hour, busy_until=local_now.hour + BUSY_HOURS
+            )
         problem = generate_opc(opc_config)
         seed = opc_config.seed
         label = body.preset
@@ -49,7 +68,7 @@ def generate_scenario(body: schemas.GenerateRequest, session: SessionDep) -> sch
         problem,
         name=body.name or f"Synthetic {label} (seed {seed})",
         description="Fully fictional synthetic data.",
-        horizon_start=SYNTHETIC_HORIZON_START,
+        horizon_start=horizon_start,
         time_unit_minutes=60,
         seed=seed,
     )

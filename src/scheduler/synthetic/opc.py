@@ -46,6 +46,7 @@ class OpcConfig:
     maintenance: bool = False
     live: bool = False  # AUTORP follow-ups, DIFFUSION arrivals, merge cap, lines busy at start
     busy_until: int = 36  # live only: units until lines A, B and C finish the current order
+    now_unit: int = 0  # live only: the plan starts this many units after midnight of day 0
 
     def __post_init__(self) -> None:
         if self.num_jobs < 1:
@@ -118,7 +119,10 @@ def _generate_live(config: OpcConfig) -> ProblemInstance:
             id=chr(ord("A") + i),
             name=f"Line {chr(ord('A') + i)}",
             windows=(
-                Window(config.busy_until if chr(ord("A") + i) in BUSY_LINES else 0, horizon),
+                Window(
+                    config.busy_until if chr(ord("A") + i) in BUSY_LINES else config.now_unit,
+                    horizon,
+                ),
             ),
             capacity=cpus,
         )
@@ -134,13 +138,17 @@ def _generate_live(config: OpcConfig) -> ProblemInstance:
         priority = _randint(rng, 1, 5)
         if diffusion:
             work = MIN_CPU_HOURS + int(draw * (DIFFUSION_MAX_CPU_HOURS - MIN_CPU_HOURS))
-            release = _randint(rng, 1, ARRIVAL_DAYS * UNITS_PER_DAY)
+            span = min(
+                ARRIVAL_DAYS * UNITS_PER_DAY,
+                DUE_DAYS * UNITS_PER_DAY - CYCLE_LIMIT_UNITS - config.now_unit,
+            )
+            release = config.now_unit + _randint(rng, 1, max(1, span))
             due = _due_at_end_of_day(rng)
             if due < release + CYCLE_LIMIT_UNITS:  # leave room for the 12 h cycle
-                due = DUE_DAYS * UNITS_PER_DAY
+                due = max(DUE_DAYS * UNITS_PER_DAY, release + CYCLE_LIMIT_UNITS)
         else:
             work = MIN_CPU_HOURS + int(draw * draw * (MAX_CPU_HOURS - MIN_CPU_HOURS))
-            release = 0
+            release = config.now_unit
             due = _due_at_end_of_day(rng)
         jobs.append(
             Job(

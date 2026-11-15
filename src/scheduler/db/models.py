@@ -28,6 +28,7 @@ from sqlalchemy import (
     UniqueConstraint,
     false,
     func,
+    true,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -249,3 +250,76 @@ class RunMetrics(Base):
     cycle_points: Mapped[int] = mapped_column(default=0, server_default="0")
 
     run: Mapped[ScheduleRun] = relationship(back_populates="metrics")
+
+
+class ReleasedPlan(Base):
+    """A solved run handed to the production floor. Only one plan is active at a time."""
+
+    __tablename__ = "released_plans"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    scenario_id: Mapped[int] = mapped_column(ForeignKey("scenarios.id", ondelete="CASCADE"))
+    run_id: Mapped[int] = mapped_column(ForeignKey("schedule_runs.id", ondelete="CASCADE"))
+    released_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    released_by: Mapped[str] = mapped_column(String(80), default="")
+    note: Mapped[str] = mapped_column(Text, default="")
+    active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
+
+    scenario: Mapped[Scenario] = relationship()
+    run: Mapped[ScheduleRun] = relationship()
+    actuals: Mapped[list[JobActual]] = relationship(
+        back_populates="plan",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="JobActual.id",
+    )
+
+
+class JobActual(Base):
+    """What really happened to one job of a released plan."""
+
+    __tablename__ = "job_actuals"
+    __table_args__ = (
+        UniqueConstraint("plan_id", "job_id", name="uq_job_actuals_plan_job"),
+        CheckConstraint("status IN ('planned', 'running', 'done')", name="status_valid"),
+        CheckConstraint(
+            "actual_end IS NULL OR actual_start IS NULL OR actual_end >= actual_start",
+            name="end_after_start",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    plan_id: Mapped[int] = mapped_column(ForeignKey("released_plans.id", ondelete="CASCADE"))
+    job_id: Mapped[int] = mapped_column(ForeignKey("jobs.id", ondelete="CASCADE"))
+    status: Mapped[str] = mapped_column(String(10), default="planned")
+    actual_start: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    actual_end: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    note: Mapped[str] = mapped_column(Text, default="")
+    updated_by: Mapped[str] = mapped_column(String(80), default="")
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    plan: Mapped[ReleasedPlan] = relationship(back_populates="actuals")
+    job: Mapped[Job] = relationship()
+
+
+class PlanEvent(Base):
+    """Append-only log of floor updates (who did what, and when it was recorded)."""
+
+    __tablename__ = "plan_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    plan_id: Mapped[int] = mapped_column(ForeignKey("released_plans.id", ondelete="CASCADE"))
+    job_id: Mapped[int] = mapped_column(ForeignKey("jobs.id", ondelete="CASCADE"))
+    action: Mapped[str] = mapped_column(String(12))
+    actor: Mapped[str] = mapped_column(String(80), default="")
+    recorded_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    effective_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    note: Mapped[str] = mapped_column(Text, default="")
+
+    job: Mapped[Job] = relationship()
