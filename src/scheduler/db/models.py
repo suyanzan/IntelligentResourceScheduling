@@ -204,6 +204,8 @@ class Assignment(Base):
     tardiness_units: Mapped[int]
 
     run: Mapped[ScheduleRun] = relationship(back_populates="assignments")
+    job: Mapped[Job] = relationship()
+    resource: Mapped[Resource] = relationship()
 
 
 class RunMetrics(Base):

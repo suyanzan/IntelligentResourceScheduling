@@ -8,9 +8,10 @@ the transaction (see :func:`scheduler.db.session.session_scope`).
 from __future__ import annotations
 
 import datetime as dt
+from dataclasses import dataclass
 from importlib.metadata import version
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, selectinload
 
 from scheduler.db import models as orm
@@ -27,6 +28,16 @@ from scheduler.services.errors import (
 )
 
 MINUTES_PER_DAY = 1440
+
+
+@dataclass(frozen=True, slots=True)
+class ScenarioOverview:
+    """A scenario row with the counts needed for list views."""
+
+    scenario: orm.Scenario
+    resource_count: int
+    job_count: int
+    run_count: int
 
 
 def save_instance(
@@ -101,6 +112,80 @@ def delete_scenario(session: Session, scenario_id: int) -> None:
     _get_scenario(session, scenario_id)
     session.execute(delete(orm.Scenario).where(orm.Scenario.id == scenario_id))
     session.expire_all()
+
+
+def get_scenario(session: Session, scenario_id: int) -> orm.Scenario:
+    """A scenario with its resources, windows, jobs and eligibility loaded."""
+    return _get_scenario(session, scenario_id)
+
+
+def list_scenarios(session: Session) -> list[ScenarioOverview]:
+    """All scenarios, newest first, with resource/job/run counts."""
+    resources = (
+        select(func.count(orm.Resource.id))
+        .where(orm.Resource.scenario_id == orm.Scenario.id)
+        .correlate(orm.Scenario)
+        .scalar_subquery()
+    )
+    jobs = (
+        select(func.count(orm.Job.id))
+        .where(orm.Job.scenario_id == orm.Scenario.id)
+        .correlate(orm.Scenario)
+        .scalar_subquery()
+    )
+    runs = (
+        select(func.count(orm.ScheduleRun.id))
+        .where(orm.ScheduleRun.scenario_id == orm.Scenario.id)
+        .correlate(orm.Scenario)
+        .scalar_subquery()
+    )
+    rows = session.execute(
+        select(orm.Scenario, resources, jobs, runs).order_by(orm.Scenario.id.desc())
+    ).all()
+    return [ScenarioOverview(sc, int(r), int(j), int(n)) for sc, r, j, n in rows]
+
+
+def count_runs(session: Session, scenario_id: int) -> int:
+    return int(
+        session.scalar(
+            select(func.count(orm.ScheduleRun.id)).where(
+                orm.ScheduleRun.scenario_id == scenario_id
+            )
+        )
+        or 0
+    )
+
+
+def list_runs(session: Session, scenario_id: int) -> list[orm.ScheduleRun]:
+    """A scenario's runs, newest first, with metrics loaded."""
+    if session.get(orm.Scenario, scenario_id) is None:
+        raise ScenarioNotFoundError(scenario_id)
+    return list(
+        session.scalars(
+            select(orm.ScheduleRun)
+            .where(orm.ScheduleRun.scenario_id == scenario_id)
+            .options(selectinload(orm.ScheduleRun.metrics))
+            .order_by(orm.ScheduleRun.id.desc())
+        )
+    )
+
+
+def get_run(session: Session, run_id: int) -> orm.ScheduleRun:
+    """A run with metrics, assignments (and their jobs and resources) and scenario loaded."""
+    run = session.scalars(
+        select(orm.ScheduleRun)
+        .where(orm.ScheduleRun.id == run_id)
+        .options(
+            selectinload(orm.ScheduleRun.metrics),
+            selectinload(orm.ScheduleRun.assignments).selectinload(orm.Assignment.job),
+            selectinload(orm.ScheduleRun.assignments).selectinload(orm.Assignment.resource),
+            selectinload(orm.ScheduleRun.scenario),
+        )
+        .execution_options(populate_existing=True)
+    ).one_or_none()
+    if run is None:
+        raise RunNotFoundError(run_id)
+    return run
 
 
 def scenario_has_runs(session: Session, scenario_id: int) -> bool:
