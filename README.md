@@ -179,6 +179,7 @@ also starts sorted by due date.
 
 `/floor.html` is the page for line staff. A scheduler picks a solved run and chooses **Release to floor**; the plan (three days of orders with planned lines and times, aligned to real dates) becomes the active plan. Staff then see, in plant time and refreshed every 30 s:
 
+- a **Day** picker (default today) to look at any day: orders due that day, the day after, and unfinished earlier orders carried into it;
 - orders grouped by due day: **Carried over** (earlier days, not finished), Today, Tomorrow, Day after, later, so the next shift sees what the previous one left;
 - per order: planned versus actual start/finish and a plain-language variance (late start, overrun, ahead, past due);
 - per line: running order, next planned order, and flags when reality departs from the plan (late start, overrun, started out of sequence, follow-up waiting for its parent);

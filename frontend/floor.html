@@ -19,6 +19,8 @@
     <div class="clock" aria-live="off"><span id="clock-time">--:--</span> <span id="clock-day"></span></div>
     <span class="spacer"></span>
     <label>Your name <input id="operator" type="text" maxlength="80" placeholder="Duty engineer" autocomplete="name"></label>
+    <label>Day <input id="view-day" type="date" title="Show orders due on this day; earlier unfinished orders are carried over"></label>
+    <button id="today-btn" type="button" hidden>Today</button>
     <label>Line
       <select id="line-filter"><option value="">All lines</option></select>
     </label>

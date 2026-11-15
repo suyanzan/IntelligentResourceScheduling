@@ -15,7 +15,7 @@ function el(tag, className, text) {
   return node;
 }
 
-const state = { plan: null, jobs: [], skew: 0, busy: false };
+const state = { plan: null, jobs: [], skew: 0, busy: false, viewDay: null };
 // Which groups the viewer opened or folded, kept across refreshes.
 const groupOpen = new Map();
 
@@ -51,6 +51,9 @@ function fromLocalInput(value) {
   const ms = Date.parse(`${value}:00Z`) - offset() * MIN;
   return Number.isNaN(ms) ? null : new Date(ms).toISOString();
 }
+
+/** The moment the day grouping is anchored to: now, or midday of the day the viewer picked. */
+const anchorMs = () => (state.viewDay ? Date.parse(`${state.viewDay}T12:00:00Z`) - offset() * MIN : nowMs());
 
 // --- alerts, operator name, theme --------------------------------------------------------------
 
@@ -121,6 +124,7 @@ async function refresh() {
       return;
     }
     apply(plan);
+    if (!$("view-day").value) $("view-day").value = plantDay(nowMs(), offset());
     render();
     if ($("log").open) loadLog();
   } catch (error) {
@@ -154,14 +158,14 @@ function renderHeader() {
 
 function renderTiles(visible) {
   const now = nowMs();
-  const todays = visible.filter((j) => groupOf(j, now, offset()) === "today");
-  const carried = visible.filter((j) => groupOf(j, now, offset()) === "carry");
+  const todays = visible.filter((j) => groupOf(j, anchorMs(), offset()) === "today");
+  const carried = visible.filter((j) => groupOf(j, anchorMs(), offset()) === "carry");
   const t = summarize(todays, now);
   const all = summarize(visible, now);
   const tiles = $("tiles");
   tiles.replaceChildren(
     tile("Carried over", carried.length, carried.length ? "not finished on earlier days" : "nothing left from before", carried.length ? "late" : "ok"),
-    tile("Due today", `${t.done} / ${t.total}`, "finished", t.total > 0 && t.done === t.total ? "ok" : undefined),
+    tile(state.viewDay ? "Due that day" : "Due today", `${t.done} / ${t.total}`, "finished", t.total > 0 && t.done === t.total ? "ok" : undefined),
     tile("Running", all.running, "on the lines now", "run"),
     tile("Behind plan", all.behind, all.pastDue ? `${all.pastDue} already past due` : "late start or overrun", all.behind ? "late" : "ok"),
   );
@@ -244,7 +248,12 @@ function renderGroups(visible) {
   const hideDone = $("hide-done").checked;
   const container = $("groups");
   container.replaceChildren();
-  const groups = groupJobs(visible, nowMs(), offset());
+  const groups = groupJobs(visible, anchorMs(), offset());
+  if (state.viewDay) {
+    const label = (days) => dayFormat.format(new Date(anchorMs() + offset() * MIN + days * 86_400_000));
+    const titles = { today: label(0), tomorrow: label(1), dayAfter: label(2) };
+    for (const g of groups) if (titles[g.key]) g.title = titles[g.key];
+  }
   if (!groups.length) container.append(el("p", "muted", "No orders match this filter."));
   for (const group of groups) {
     const shown = hideDone ? group.jobs.filter((j) => j.status !== "done") : group.jobs;
@@ -399,6 +408,15 @@ function tickClock() {
   $("clock-day").textContent = dayFormat.format(t);
 }
 
+function setViewDay(value) {
+  state.viewDay = value || null;
+  groupOpen.clear();
+  $("view-day").value = state.viewDay ?? plantDay(nowMs(), offset());
+  $("today-btn").hidden = !state.viewDay || state.viewDay === plantDay(nowMs(), offset());
+  render();
+}
+$("view-day").addEventListener("change", () => setViewDay($("view-day").value));
+$("today-btn").addEventListener("click", () => setViewDay(null));
 $("line-filter").addEventListener("change", render);
 $("hide-done").addEventListener("change", render);
 
